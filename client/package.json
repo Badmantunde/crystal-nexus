@@ -1,0 +1,27 @@
+{
+  "name": "@crystal-nexus/client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "cap:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.49.0",
+    "@babylonjs/loaders": "^7.49.0",
+    "@crystal-nexus/shared": "*"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "typescript": "~5.7.3",
+    "vite": "^6.0.7"
+  }
+}
