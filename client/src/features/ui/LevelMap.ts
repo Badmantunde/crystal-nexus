@@ -35,6 +35,8 @@ export class LevelMap {
   private onSelect: ((level: number) => void) | null = null;
   private onDayChallengePlay: (() => void) | null = null;
   private regenTimer: ReturnType<typeof setInterval> | null = null;
+  private jumpPointerEl: HTMLButtonElement;
+  private onScrollPointer: (() => void) | null = null;
 
   constructor(containerId = 'menu-overlay') {
     const container = document.getElementById(containerId);
@@ -58,13 +60,25 @@ export class LevelMap {
         </div>
         <div class="map-start-label">Start — Sunny Grove</div>
       </div>
+      <button
+        type="button"
+        class="map-jump-pointer"
+        id="map-jump-pointer"
+        aria-label="Jump to your current level"
+        hidden
+      >
+        <img src="/pointer.svg" width="48" height="68" alt="" draggable="false" />
+      </button>
     `;
     container.appendChild(this.backdrop);
 
     this.scrollEl = this.backdrop.querySelector('.level-map-scroll')!;
     this.listEl = this.backdrop.querySelector('#map-levels')!;
     this.trailEl = this.backdrop.querySelector('#map-trail')!;
+    this.jumpPointerEl = this.backdrop.querySelector('#map-jump-pointer')!;
     this.nav = new MapNavBar(this.backdrop.querySelector('#map-nav-slot')!);
+
+    this.jumpPointerEl.addEventListener('click', () => this.scrollToCurrent());
 
     this.nav.setOnAddLives(() => this.shopModal.show('lives'));
     this.nav.setOnAddCoins(() => this.shopModal.show('coins'));
@@ -86,11 +100,13 @@ export class LevelMap {
     void this.backdrop.offsetWidth;
     this.backdrop.classList.add('visible');
     this.scrollToCurrent();
+    this.bindJumpPointer();
     this.startRegenTick();
   }
 
   hide(): void {
     this.stopRegenTick();
+    this.unbindJumpPointer();
     this.noLivesModal.hide();
     this.shopModal.hide();
     this.dayChallengeModal.hide();
@@ -112,7 +128,45 @@ export class LevelMap {
       } else {
         this.scrollEl.scrollTop = this.scrollEl.scrollHeight;
       }
+      setTimeout(() => this.updateJumpPointer(), 400);
     }, 80);
+  }
+
+  private bindJumpPointer(): void {
+    this.unbindJumpPointer();
+    this.onScrollPointer = () => this.updateJumpPointer();
+    this.scrollEl.addEventListener('scroll', this.onScrollPointer, { passive: true });
+    window.addEventListener('resize', this.onScrollPointer);
+    requestAnimationFrame(() => this.updateJumpPointer());
+  }
+
+  private unbindJumpPointer(): void {
+    if (this.onScrollPointer) {
+      this.scrollEl.removeEventListener('scroll', this.onScrollPointer);
+      window.removeEventListener('resize', this.onScrollPointer);
+      this.onScrollPointer = null;
+    }
+    this.jumpPointerEl.hidden = true;
+    this.jumpPointerEl.classList.remove('is-visible');
+  }
+
+  private updateJumpPointer(): void {
+    const current = this.scrollEl.querySelector('.map-node.current') as HTMLElement | null;
+    if (!current || this.backdrop.classList.contains('hidden')) {
+      this.jumpPointerEl.hidden = true;
+      this.jumpPointerEl.classList.remove('is-visible');
+      return;
+    }
+
+    const scrollRect = this.scrollEl.getBoundingClientRect();
+    const nodeRect = current.getBoundingClientRect();
+    const inset = 32;
+    const inView =
+      nodeRect.top >= scrollRect.top + inset &&
+      nodeRect.bottom <= scrollRect.bottom - inset;
+
+    this.jumpPointerEl.hidden = inView;
+    this.jumpPointerEl.classList.toggle('is-visible', !inView);
   }
 
   private render(): void {
@@ -170,6 +224,7 @@ export class LevelMap {
     });
 
     void this.applyTileArt();
+    requestAnimationFrame(() => this.updateJumpPointer());
   }
 
   private renderChapterHeader(level: number): string {

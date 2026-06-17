@@ -2258,6 +2258,39 @@ textarea {
   padding: 0 8px 28px;
 }
 
+.map-jump-pointer {
+  position: fixed;
+  left: 50%;
+  bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  z-index: 25;
+  transform: translateX(-50%);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+
+.map-jump-pointer.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  animation: mapPointerFloat 2.4s ease-in-out infinite;
+}
+
+.map-jump-pointer img {
+  display: block;
+  width: 48px;
+  height: auto;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.42));
+}
+
+@keyframes mapPointerFloat {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-10px); }
+}
+
 .map-start-label,
 .map-summit-label {
   text-align: center;
