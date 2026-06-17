@@ -1,6 +1,6 @@
 import { CrystalCategory } from '@crystal-nexus/shared';
 
-export type FruitKind = 'apple' | 'berry' | 'orange' | 'pear' | 'grape' | 'carrot';
+export type FruitKind = 'apple' | 'berry' | 'orange' | 'pear' | 'grape' | 'carrot' | 'rainbow';
 
 const BASE = '/fruits';
 
@@ -11,6 +11,7 @@ export const FRUIT_URLS: Record<FruitKind, string> = {
   pear: `${BASE}/pear.svg`,
   grape: `${BASE}/garpe.svg`,
   carrot: `${BASE}/carrot.svg`,
+  rainbow: `${BASE}/rainbow.svg`,
 };
 
 /** Six board piece types — one fruit art per category. */
@@ -74,6 +75,13 @@ export function getFruitSprite(kind: FruitKind): HTMLImageElement | undefined {
   if (img?.complete && img.naturalWidth > 0) return img;
   return undefined;
 }
+
+export function getRainbowSprite(): HTMLImageElement | undefined {
+  return getFruitSprite('rainbow');
+}
+
+/** Prismatic palette for rainbow fruit VFX. */
+export const RAINBOW_PALETTE = ['#FF4D6D', '#FF9F1C', '#FFE94E', '#4ADE80', '#38BDF8', '#A78BFA', '#F472B6'] as const;
 
 export function areFruitSpritesReady(): boolean {
   return (Object.keys(FRUIT_URLS) as FruitKind[]).every((kind) => getFruitSprite(kind) != null);

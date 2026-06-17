@@ -4,6 +4,7 @@ import { MAP_NAV } from './mapNavAssets';
 export interface MapNavState {
   level: number;
   rank: string;
+  playerName?: string;
   lives: number;
   livesRegenMs?: number | null;
   coins: number;
@@ -134,7 +135,8 @@ export class MapNavBar {
 
     this.coinsEl.textContent = state.coins.toLocaleString();
     this.levelNumEl.textContent = `LV ${state.level}`;
-    this.rankEl.textContent = state.rank.toUpperCase();
+    const name = state.playerName?.trim();
+    this.rankEl.textContent = name ? name.toUpperCase() : state.rank.toUpperCase();
     this.scoreEl.textContent = state.score.toLocaleString();
     this.streakEl.textContent = `x${state.streak ?? 1}`;
 

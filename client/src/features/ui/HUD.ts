@@ -5,6 +5,7 @@ import { getObjectiveRemainingCount } from '../player/LevelObjectives';
 import type { FruitKind } from '../candy/fruitAssets';
 import { FRUIT_URLS } from '../candy/fruitAssets';
 import type { CrystalCategory } from '@crystal-nexus/shared';
+import { SoundEngine } from '../audio/SoundEngine';
 
 const HUD_FRUIT_ORDER: FruitKind[] = ['orange', 'apple', 'pear'];
 const VOLUME_MUTED_KEY = 'cn-muted';
@@ -29,6 +30,7 @@ export interface HUDState {
   rushTarget?: number;
   bossHp?: number;
   bossHpMax?: number;
+  combo?: number;
   message?: string;
 }
 
@@ -46,6 +48,8 @@ export class HUD {
   private diffTextEl: HTMLElement;
   private restartBtn: HTMLButtonElement;
   private volumeBtn: HTMLButtonElement;
+  private comboEl: HTMLElement;
+  private comboCardEl: HTMLElement;
   private onRestart: (() => void) | null = null;
   private onQuit: (() => void) | null = null;
   private onSettings: (() => void) | null = null;
@@ -84,6 +88,13 @@ export class HUD {
                 <span class="hud-target-count" id="hud-target-pear">120</span>
               </div>
             </div>
+          </div>
+          <div class="hud-combo-card" id="hud-combo-card">
+            <div class="hud-card-head">
+              <span class="hud-card-icon hud-icon-combo"></span>
+              <span class="hud-card-label">Combo</span>
+            </div>
+            <span class="hud-combo-value" id="hud-combo-val">x0</span>
           </div>
           <div class="hud-moves-card">
             <div class="hud-card-head">
@@ -143,22 +154,27 @@ export class HUD {
     this.diffTextEl = container.querySelector('#hud-diff-text')!;
     this.restartBtn = container.querySelector('#hud-restart')!;
     this.volumeBtn = container.querySelector('#hud-volume')!;
+    this.comboEl = container.querySelector('#hud-combo-val')!;
+    this.comboCardEl = container.querySelector('#hud-combo-card')!;
 
     this.restartBtn.addEventListener('click', () => this.onRestart?.());
     container.querySelector('#hud-exit')!.addEventListener('click', () => this.onQuit?.());
     container.querySelector('#hud-settings')!.addEventListener('click', () => this.onSettings?.());
 
     this.muted = localStorage.getItem(VOLUME_MUTED_KEY) === '1';
+    SoundEngine.setMuted(this.muted);
     this.syncVolumeButton();
     this.volumeBtn.addEventListener('click', () => {
       this.muted = !this.muted;
+      SoundEngine.setMuted(this.muted);
       localStorage.setItem(VOLUME_MUTED_KEY, this.muted ? '1' : '0');
       this.syncVolumeButton();
+      if (!this.muted) SoundEngine.playUi();
     });
   }
 
   isMuted(): boolean {
-    return this.muted;
+    return SoundEngine.isMuted();
   }
 
   private syncVolumeButton(): void {
@@ -167,16 +183,49 @@ export class HUD {
   }
 
   setBoardFooterAnchor(boardBottom: number, centerX: number): void {
-    const footerGap = 12;
-    const toolbarGap = 90;
-    const footerRowHeight = 40;
+    const vh = window.innerHeight;
+    const compact = vh < 720;
+    const footerGap = compact ? 8 : 12;
+    const footerRowHeight = compact ? 36 : 40;
+    const toolbarH = compact ? 36 : 40;
+    const safeBottom = Math.max(8, parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)') || '0', 10) || 8);
 
-    this.boardFooterEl.style.top = `${boardBottom + footerGap}px`;
+    if (compact) {
+      this.boardFooterEl.classList.add('hud-board-footer--compact');
+      this.sideToolbarEl.classList.add('hud-side-toolbar--compact');
+    } else {
+      this.boardFooterEl.classList.remove('hud-board-footer--compact');
+      this.sideToolbarEl.classList.remove('hud-side-toolbar--compact');
+    }
+
+    const footerTop = boardBottom + footerGap;
+    const maxFooterTop = vh - safeBottom - footerRowHeight - (compact ? toolbarH + 6 : 0) - 8;
+
+    if (footerTop > maxFooterTop) {
+      this.boardFooterEl.style.top = 'auto';
+      this.boardFooterEl.style.bottom = `${safeBottom + (compact ? toolbarH + 6 : 0)}px`;
+    } else {
+      this.boardFooterEl.style.top = `${footerTop}px`;
+      this.boardFooterEl.style.bottom = 'auto';
+    }
     this.boardFooterEl.style.left = `${centerX}px`;
 
-    this.sideToolbarEl.style.top = `${boardBottom + footerGap + footerRowHeight + toolbarGap}px`;
-    this.sideToolbarEl.style.right = '20px';
+    if (compact) {
+      this.sideToolbarEl.style.top = 'auto';
+      this.sideToolbarEl.style.bottom = `${safeBottom}px`;
+      this.sideToolbarEl.style.right = 'max(10px, env(safe-area-inset-right))';
+      this.sideToolbarEl.style.left = 'auto';
+      return;
+    }
+
+    const toolbarGap = vh < 700 ? 48 : 72;
+    const rawToolbarTop = footerTop + footerRowHeight + toolbarGap;
+    const maxTop = vh - safeBottom - toolbarH - 8;
+    const toolbarTop = Math.min(rawToolbarTop, maxTop);
+
+    this.sideToolbarEl.style.top = `${toolbarTop}px`;
     this.sideToolbarEl.style.bottom = 'auto';
+    this.sideToolbarEl.style.right = 'max(10px, env(safe-area-inset-right))';
     this.sideToolbarEl.style.left = 'auto';
   }
 
@@ -249,6 +298,11 @@ export class HUD {
       this.boardFooterEl.querySelector('#hud-diff-pill')!.className =
         `hud-diff-pill ${state.difficultyClass}`;
     }
+
+    const combo = state.combo ?? 0;
+    this.comboEl.textContent = `x${combo}`;
+    this.comboCardEl.classList.toggle('hud-combo-card--hot', combo >= 3);
+    this.comboCardEl.classList.toggle('hud-combo-card--fire', combo >= 5);
 
     if (state.message) {
       this.messageEl.textContent = state.message;

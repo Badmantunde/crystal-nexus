@@ -233,6 +233,10 @@ export class LevelMap {
     );
   }
 
+  private mapSide(level: number): 'left' | 'right' {
+    return level % 2 === 0 ? 'right' : 'left';
+  }
+
   private nodeCenter(index: number, level: number, levelCount: number): { x: number; y: number } {
     const chapterRows = Array.from({ length: levelCount }, (_, i) => i + 1).filter((lv) =>
       isChapterStart(lv),
@@ -240,7 +244,7 @@ export class LevelMap {
     const totalH = this.mapStageHeight(levelCount, chapterRows);
     const y = totalH - BOTTOM_PAD - this.verticalOffsetFromBottom(level);
 
-    const side = index % 2 === 0 ? 'left' : 'right';
+    const side = this.mapSide(level);
     const baseX = side === 'left' ? NODE_HALF + 12 : MAP_W - NODE_HALF - 12;
     const wobble = this.seededOffset(index, 18) - 9;
     const x = baseX + (side === 'left' ? wobble : -wobble);
@@ -306,7 +310,7 @@ export class LevelMap {
   }
 
   private renderNode(info: LevelInfo, index: number): string {
-    const side = index % 2 === 0 ? 'left' : 'right';
+    const side = this.mapSide(info.level);
     const locked = !info.unlocked;
     const isCurrent = info.level === this.progress.getUnlockedLevel() && !locked;
     const cfg = buildLevelConfig(info.level);
@@ -315,29 +319,31 @@ export class LevelMap {
 
     return `
       <div class="map-row map-row-${side}" style="--row-i:${index}">
-        <button
-          type="button"
-          class="map-node${locked ? ' locked' : ' playable'}${isCurrent ? ' current' : ''} ${diffClass}"
-          data-level="${info.level}"
-          aria-label="Level ${info.level}${locked ? ' locked' : ''}${info.stars ? `, ${info.stars} stars` : ''}"
-          ${locked ? 'disabled' : ''}
-        >
-          <img
-            class="map-node-art"
+        <div class="map-node-stack">
+          <button
+            type="button"
+            class="map-node${locked ? ' locked' : ' playable'}${isCurrent ? ' current' : ''} ${diffClass}"
             data-level="${info.level}"
-            data-unlocked="${locked ? 'false' : 'true'}"
-            width="${NODE_W}"
-            height="${NODE_H}"
-            alt=""
-            draggable="false"
-          />
-          <span class="map-node-stars" title="${info.stars} of 3 stars">${starRowHtml(info.stars)}</span>
-        </button>
-        ${
-          canSkip
-            ? `<button type="button" class="map-node-skip" data-skip-level="${info.level}" aria-label="Skip stage for ${SHOP.skipStage} coins">Skip · ${SHOP.skipStage}</button>`
-            : ''
-        }
+            aria-label="Level ${info.level}${locked ? ' locked' : ''}${info.stars ? `, ${info.stars} stars` : ''}"
+            ${locked ? 'disabled' : ''}
+          >
+            <img
+              class="map-node-art"
+              data-level="${info.level}"
+              data-unlocked="${locked ? 'false' : 'true'}"
+              width="${NODE_W}"
+              height="${NODE_H}"
+              alt=""
+              draggable="false"
+            />
+            <span class="map-node-stars" title="${info.stars} of 3 stars">${starRowHtml(info.stars)}</span>
+          </button>
+          ${
+            canSkip
+              ? `<button type="button" class="map-node-skip" data-skip-level="${info.level}" aria-label="Skip stage for ${SHOP.skipStage} coins">Skip · ${SHOP.skipStage}</button>`
+              : ''
+          }
+        </div>
       </div>
     `;
   }

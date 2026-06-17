@@ -7,12 +7,15 @@ import {
 } from '../match3/SimpleBoard';
 import { drawCandy } from './CandyDrawer';
 import { preloadFruitSprites } from '../candy/fruitAssets';
-import { drawLineBlast, blastCellVanish, blastScreenFlash, blastShakeIntensity } from './BlastDrawer';
+import { drawLineBlast, blastCellVanish, blastScreenFlash, blastShakeIntensity, drawRainbowScreenFlash } from './BlastDrawer';
 import { drawTileModifiers } from './ModifierDrawer';
 import { getModifiersForLevel } from '../match3/BoardModifiers';
 import { consumeArmedBooster } from '../player/Boosters';
+import { recordLoss, recordWin, winStreakLabel } from '../player/WinStreak';
 import { HUD } from '../ui/HUD';
 import { PraiseOverlay } from '../ui/PraiseOverlay';
+import { GuideCharacter } from '../ui/GuideCharacter';
+import { SoundEngine } from '../audio/SoundEngine';
 import {
   praiseForBlast,
   praiseForCombo,
@@ -91,6 +94,7 @@ export class CanvasGame {
   private board: SimpleBoard;
   private hud: HUD;
   private praise: PraiseOverlay;
+  private guide: GuideCharacter;
   private levelCard: LevelCompleteCard;
   private dayResultCard: DayChallengeResultCard;
   private levelWelcome: LevelWelcomeCard;
@@ -134,7 +138,9 @@ export class CanvasGame {
   private dirty = true;
   private visible = false;
   private tutorialShown = false;
+  private nearMissShown = false;
   private lastLivesTick = 0;
+  private animTime = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -156,6 +162,7 @@ export class CanvasGame {
     this.lives = new LivesManager();
     this.levelProgress = new LevelProgress();
     this.praise = new PraiseOverlay();
+    this.guide = new GuideCharacter();
     this.levelCard = new LevelCompleteCard();
     this.dayResultCard = new DayChallengeResultCard();
     this.levelWelcome = new LevelWelcomeCard();
@@ -171,6 +178,7 @@ export class CanvasGame {
     window.addEventListener('resize', () => this.resize());
 
     const loop = (t: number) => {
+      this.animTime = t;
       if (this.visible) {
         const atZeroLives = this.lives.getLives() === 0;
         if ((this.lives.hasPendingRegen() || atZeroLives) && t - this.lastLivesTick >= 1000) {
@@ -248,8 +256,11 @@ export class CanvasGame {
 
   private resize(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.min(window.innerWidth, 420);
-    const h = Math.min(window.innerHeight, w * (16 / 9));
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const short = vh < 720;
+    const w = Math.min(vw, vw >= 520 ? 480 : short ? 380 : 400);
+    const h = Math.min(vh, short ? Math.max(w * 1.18, vh * 0.86) : Math.max(w * 1.32, vh * 0.94));
 
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
@@ -264,7 +275,7 @@ export class CanvasGame {
     let cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
 
     if (cell < 12) {
-      top = 168;
+      top = Math.min(vh < 700 ? 128 : 148, Math.round(h * 0.26));
       boardH = h - top - pad;
       cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
     }
@@ -589,6 +600,7 @@ export class CanvasGame {
 
     this.swapPair = { a: { row: r1, col: c1 }, b: { row: r2, col: c2 } };
     this.swapProgress = this.swapAnimFrom;
+    SoundEngine.playSwap();
     await this.startAnim('swap', 80);
 
     const valid = this.board.wouldMatchAfterSwap(r1, c1, r2, c2);
@@ -615,11 +627,12 @@ export class CanvasGame {
       this.fallMovingFrom = null;
       this.markDirty();
       const blastCombo = praiseForCombo(this.board.getCombo());
-      if (blastCombo) this.praise.show(blastCombo);
+      if (blastCombo) this.showComboFeedback(blastCombo);
     }
 
     await this.runMatchSequence();
     this.updateHud();
+    this.checkNearMiss();
     this.checkWin();
     this.phase = 'idle';
   }
@@ -627,9 +640,11 @@ export class CanvasGame {
   private async playBlastAnimation(blast: SpecialBlast): Promise<void> {
     this.activeBlast = blast;
     this.blastProgress = 0;
-    this.praise.show(praiseForBlast(blast.kind, blast.targetCategory), blast.kind === 'color' ? 1100 : 1400);
+    this.praise.show(praiseForBlast(blast.kind, blast.targetCategory), blast.kind === 'color' ? 1200 : 1400);
+    if (blast.kind === 'color') SoundEngine.playRainbow();
+    else SoundEngine.playSpecial();
     const duration =
-      blast.kind === 'color' ? 500
+      blast.kind === 'color' ? 820
       : blast.kind === 'cross' ? 620
       : blast.kind === 'col_double' ? 680
       : 520;
@@ -660,7 +675,7 @@ export class CanvasGame {
         const combo = this.board.getCombo();
         this.peakCombo = Math.max(this.peakCombo, combo);
         const comboPraise = praiseForCombo(combo);
-        if (comboPraise) this.praise.show(comboPraise);
+        if (comboPraise) this.showComboFeedback(comboPraise);
         await this.startAnim('pause', 50);
         continue;
       }
@@ -669,9 +684,12 @@ export class CanvasGame {
 
       const clearPraise = praiseForClearCount(wave.cells.length);
       if (clearPraise) this.praise.show(clearPraise);
+      SoundEngine.playMatch(this.board.getCombo());
 
       if (wave.spawn) {
         this.praise.show(praiseForSpawn(wave.spawn.cell.special));
+        if (wave.spawn.cell.special === 'color') SoundEngine.playRainbow();
+        else SoundEngine.playSpecial();
       }
 
       await this.startAnim('shake', 220);
@@ -695,10 +713,37 @@ export class CanvasGame {
       const combo = this.board.getCombo();
       this.peakCombo = Math.max(this.peakCombo, combo);
       const comboPraise = praiseForCombo(combo);
-      if (comboPraise) this.praise.show(comboPraise);
+      if (comboPraise) this.showComboFeedback(comboPraise);
 
       await this.startAnim('pause', 50);
     }
+  }
+
+  private showComboFeedback(msg: import('../ui/PraiseSystem').PraiseMessage): void {
+    this.praise.show(msg);
+    SoundEngine.playCombo(msg.combo ?? 2);
+    this.updateHud();
+  }
+
+  private checkNearMiss(): void {
+    if (this.levelEnded || this.gameMode === 'day') return;
+    const moves = this.board.getMoves();
+    if (moves > 3) {
+      this.nearMissShown = false;
+      return;
+    }
+    if (moves <= 0 || this.nearMissShown) return;
+
+    const won = isLevelTargetComplete(
+      this.levelTarget,
+      this.board.getScore(),
+      this.board.getCollectedCounts(),
+    );
+    if (won) return;
+
+    this.nearMissShown = true;
+    SoundEngine.playNearMiss();
+    this.guide.say(`Only ${moves} move${moves === 1 ? '' : 's'} left — make it count!`, 3000);
   }
 
   private updateHud(): void {
@@ -716,6 +761,7 @@ export class CanvasGame {
           nav,
           score: this.board.getScore(),
           moves: this.board.getMoves(),
+          combo: this.board.getCombo(),
           level: nav.level,
           maxLives: MAX_LIVES,
           targetTask: 'rush',
@@ -729,6 +775,7 @@ export class CanvasGame {
           nav,
           score: this.board.getScore(),
           moves: this.board.getMoves(),
+          combo: this.board.getCombo(),
           level: nav.level,
           maxLives: MAX_LIVES,
           targetTask: 'boss',
@@ -742,6 +789,7 @@ export class CanvasGame {
           nav,
           score: this.board.getScore(),
           moves: this.board.getMoves(),
+          combo: this.board.getCombo(),
           level: nav.level,
           maxLives: MAX_LIVES,
           targetTask: 'score',
@@ -757,6 +805,7 @@ export class CanvasGame {
       nav,
       score: this.board.getScore(),
       moves: this.board.getMoves(),
+      combo: this.board.getCombo(),
       level: this.level,
       maxLives: MAX_LIVES,
       targetTask: this.levelTarget.taskType,
@@ -856,7 +905,12 @@ export class CanvasGame {
       const stars = calcStars(score, target, movesLeft);
       this.levelProgress.recordWin(this.level, stars);
       this.lastCoinsEarned = grantCoins(coinsForStars(stars));
-      this.praise.show({ text: 'Level Complete!', tier: 'legendary', sub: `Level ${this.level}` }, 1800);
+      SoundEngine.playWin();
+      SoundEngine.playCoin();
+      const streak = recordWin();
+      const streakMsg = winStreakLabel(streak);
+      this.praise.show({ text: 'Level Complete!', tier: 'legendary', sub: streakMsg || `Level ${this.level}` }, 1800);
+      if (streak >= 3) this.guide.say(`You're on fire — ${streak} wins straight!`, 3200);
       setTimeout(() => this.showLevelEndCard(true), 600);
     } else if (movesLeft <= 0) {
       if (this.canOfferContinue()) {
@@ -895,6 +949,8 @@ export class CanvasGame {
   }
 
   private applyLevelFail(): void {
+    recordLoss();
+    SoundEngine.playLose();
     this.maybeLoseLife();
     this.updateHud();
     setTimeout(() => this.showLevelEndCard(false), 400);
@@ -1105,6 +1161,7 @@ export class CanvasGame {
     applyDifficultyThemeClass(this.stageTheme.hudClass);
     this.peakCombo = 0;
     this.levelEnded = false;
+    this.nearMissShown = false;
     const modifiers = getModifiersForLevel(level, ROWS, COLS);
     this.board = new SimpleBoard(ROWS, COLS, this.levelConfig.moves, { modifiers });
     this.applyArmedBooster();
@@ -1122,12 +1179,14 @@ export class CanvasGame {
     });
     this.markDirty();
 
+    setTimeout(() => this.guide.tipForLevel(level), 600);
+
     const tagline = getLevelTagline(level);
     if (tagline) {
       this.hud.showToast(tagline, 3800);
     } else if (!this.tutorialShown) {
       this.tutorialShown = true;
-      this.hud.showToast('Match 4 = row/col bomb · Match 5 = color bomb', 4500);
+      this.hud.showToast('Match 4 = row/col bomb · Match 5 = rainbow fruit', 4500);
     } else if (modifiers && (modifiers.jelly.length > 0 || modifiers.crates.length > 0)) {
       this.hud.showToast('Clear jelly twice · break crates with adjacent matches', 3600);
     } else if (hasPracticeShield(level)) {
@@ -1195,8 +1254,12 @@ export class CanvasGame {
     if (blast && this.phase === 'blast') {
       const flash = blastScreenFlash(blast, this.blastProgress);
       if (flash > 0.01) {
-        this.ctx.fillStyle = `rgba(255,255,255,${flash})`;
-        this.ctx.fillRect(0, 0, w, h);
+        if (blast.kind === 'color') {
+          drawRainbowScreenFlash(this.ctx, w, h, flash, this.blastProgress);
+        } else {
+          this.ctx.fillStyle = `rgba(255,255,255,${flash})`;
+          this.ctx.fillRect(0, 0, w, h);
+        }
       }
     }
   }
@@ -1223,7 +1286,7 @@ export class CanvasGame {
     if (blast && blastCellSet?.has(key)) {
       const vanish = blastCellVanish(blast, r, c, this.blastProgress);
       if (vanish > 0) {
-        const kick = blast.kind === 'color' ? 10 : 8;
+        const kick = blast.kind === 'color' ? 12 : 8;
         shakeX = Math.sin(vanish * Math.PI * 8) * (1 - vanish) * kick;
         shakeY = Math.cos(vanish * Math.PI * 6) * (1 - vanish) * kick * 0.85;
       }
@@ -1286,6 +1349,7 @@ export class CanvasGame {
       shakeY,
       special: candy.special,
       lite: true,
+      animTime: this.animTime,
     });
   }
 
@@ -1301,6 +1365,7 @@ export class CanvasGame {
         drawCandy(this.ctx, center.x, center.y, cell, candy.category, {
           special: candy.special,
           lite: true,
+          animTime: this.animTime,
         });
       }
     }
@@ -1316,6 +1381,7 @@ export class CanvasGame {
         alpha: move.isNew ? 0.75 + t * 0.25 : 1,
         special: move.candy.special,
         lite: true,
+        animTime: this.animTime,
       });
     }
   }

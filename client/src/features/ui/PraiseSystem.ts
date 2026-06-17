@@ -27,7 +27,7 @@ export function praiseForSpawn(special: SpecialType): PraiseMessage {
     case 'col':
       return { text: 'Column Bomb!', tier: 'great', sub: 'Swipe to blast a column' };
     case 'color':
-      return { text: 'Color Bomb!', tier: 'amazing', sub: 'Match any color' };
+      return { text: 'Rainbow Fruit!', tier: 'amazing', sub: 'Clears one fruit color' };
     default:
       return { text: 'Special!', tier: 'nice' };
   }
@@ -41,8 +41,8 @@ export function praiseForBlast(
   if (kind === 'col_double') return { text: 'Double Strike!', tier: 'amazing', sub: 'Column hit twice' };
   if (kind === 'row') return { text: 'Kaboom!', tier: 'great', sub: 'Row cleared' };
   if (kind === 'col') return { text: 'Zip Zap!', tier: 'great', sub: 'Column cleared' };
-  const label = category ? getCandyStyle(category).label : 'Color';
-  return { text: 'Thunder Strike!', tier: 'legendary', sub: `All ${label} candies cleared` };
+  const label = category ? getCandyStyle(category).label : 'fruit';
+  return { text: 'Rainbow Blast!', tier: 'legendary', sub: `All ${label} candies cleared` };
 }
 
 export function praiseForClearCount(count: number): PraiseMessage | null {

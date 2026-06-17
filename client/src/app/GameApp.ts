@@ -1,12 +1,14 @@
 import { CanvasGame } from '@/features/renderer/CanvasGame';
+import { GuideOnboarding, needsOnboarding } from '@/features/ui/GuideOnboarding';
 import { SplashScreen } from '@/features/ui/SplashScreen';
 import { LevelMap } from '@/features/ui/LevelMap';
 
-/** App shell: splash → level map → gameplay */
+/** App shell: splash → onboarding → level map → gameplay */
 export class GameApp {
   private container: HTMLElement;
   private game: CanvasGame | null = null;
   private map: LevelMap;
+  private onboarding = new GuideOnboarding();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -14,7 +16,13 @@ export class GameApp {
     this.map.setOnDayChallengePlay(() => this.startDayChallenge());
 
     const splash = new SplashScreen();
-    splash.show(() => this.openMap());
+    splash.show(() => {
+      if (needsOnboarding()) {
+        this.onboarding.show(() => this.openMap());
+      } else {
+        this.openMap();
+      }
+    });
   }
 
   dispose(): void {

@@ -1,4 +1,5 @@
 import { getCandyStyle } from '../candy/CandyTypes';
+import { RAINBOW_PALETTE } from '../candy/fruitAssets';
 import type { SpecialBlast } from '../match3/SimpleBoard';
 
 export function drawLineBlast(
@@ -38,7 +39,7 @@ export function drawLineBlast(
       ctx.fillRect(x, y, w, h);
     }
   } else if (blast.kind === 'color') {
-    drawColorThunder(ctx, blast, board, ox, oy, progress);
+    drawRainbowBlast(ctx, blast, board, ox, oy, progress);
   }
 
   ctx.restore();
@@ -59,9 +60,9 @@ export function blastScreenFlash(blast: SpecialBlast, progress: number): number 
     return 0;
   }
   if (blast.kind === 'color') {
-    if (t < 0.1) return (t / 0.1) * 0.3;
-    if (t < 0.17) return 0.72 * (1 - (t - 0.1) / 0.07);
-    if (t > 0.78 && t < 0.92) return ((t - 0.78) / 0.14) * 0.1;
+    if (t < 0.08) return (t / 0.08) * 0.45;
+    if (t < 0.18) return 0.85 * (1 - (t - 0.08) / 0.1);
+    if (t > 0.72 && t < 0.9) return ((t - 0.72) / 0.18) * 0.22;
     return 0;
   }
   if (t < 0.1) return (t / 0.1) * 0.42;
@@ -82,9 +83,10 @@ export function blastShakeIntensity(blast: SpecialBlast, progress: number): numb
   }
   if (blast.kind === 'color') {
     let spike = 1;
-    if (progress > 0.09 && progress < 0.2) spike = 2.4;
-    else if (progress > 0.14 && progress < 0.72) spike = 1.35 + Math.abs(Math.sin(progress * Math.PI * 28)) * 0.55;
-    return 13 * decay * spike;
+    if (progress > 0.1 && progress < 0.22) spike = 2.8;
+    else if (progress > 0.18 && progress < 0.75) spike = 1.5 + Math.abs(Math.sin(progress * Math.PI * 22)) * 0.75;
+    else if (progress > 0.75) spike = 1.1;
+    return 15 * decay * spike;
   }
   const base = 9;
   const spike = progress < 0.12 ? 1.6 : progress < 0.45 ? 1.2 : 0.85;
@@ -411,7 +413,31 @@ function drawSparkStrip(
   }
 }
 
-function drawColorThunder(
+/** Prismatic full-screen flash for rainbow fruit detonation. */
+export function drawRainbowScreenFlash(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  intensity: number,
+  progress: number,
+): void {
+  if (intensity <= 0.01) return;
+  const hueShift = progress * 360;
+  const grad = ctx.createLinearGradient(0, 0, w, h);
+  RAINBOW_PALETTE.forEach((c, i) => {
+    grad.addColorStop(i / (RAINBOW_PALETTE.length - 1), c);
+  });
+  ctx.save();
+  ctx.globalAlpha = intensity * 0.55;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalAlpha = intensity * 0.35;
+  ctx.fillStyle = `hsla(${(hueShift + 40) % 360}, 100%, 92%, 1)`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+function drawRainbowBlast(
   ctx: CanvasRenderingContext2D,
   blast: SpecialBlast,
   board: { x: number; y: number; cell: number; w: number; h: number },
@@ -419,294 +445,250 @@ function drawColorThunder(
   oy: number,
   progress: number,
 ): void {
-  const style = blast.targetCategory ? getCandyStyle(blast.targetCategory) : null;
-  const color = style?.color ?? '#FFD54F';
   const cell = board.cell;
   const boardW = board.cell * blast.cols;
   const boardH = board.cell * blast.rows;
+  const targetColor = blast.targetCategory ? getCandyStyle(blast.targetCategory).color : '#FFD54F';
+  const targetLabel = blast.targetCategory ? getCandyStyle(blast.targetCategory).label : 'fruit';
 
-  const chargeT = clamp01(progress / 0.12);
-  const detonateT = clamp01((progress - 0.1) / 0.12);
-  const strikePhase = clamp01((progress - 0.13) / 0.62);
+  const chargeT = clamp01(progress / 0.14);
+  const detonateT = clamp01((progress - 0.12) / 0.14);
+  const cascadeT = clamp01((progress - 0.2) / 0.68);
+  const fadeT = clamp01((progress - 0.82) / 0.18);
 
-  // Phase 1 — board dims, energy coils inward
-  if (progress < 0.2) {
-    const dim = chargeT * 0.5 + detonateT * 0.2;
-    ctx.fillStyle = `rgba(12,4,32,${dim})`;
+  // Phase 1 — prismatic charge + board vignette
+  if (progress < 0.22) {
+    const dim = chargeT * 0.45 + detonateT * 0.25;
+    ctx.fillStyle = `rgba(8,4,28,${dim})`;
     ctx.fillRect(board.x, board.y, boardW, boardH);
   }
 
-  drawColorVortex(ctx, ox, oy, cell, chargeT, color);
+  drawRainbowVortex(ctx, ox, oy, cell, chargeT, progress);
+  drawRainbowOrbitRings(ctx, ox, oy, cell, chargeT + detonateT * 0.5, progress);
 
-  // Phase 2 — detonation nova + radial shockwave
+  // Phase 2 — supernova detonation
   if (detonateT > 0) {
-    drawColorDetonation(ctx, ox, oy, cell, board, color, detonateT);
-    drawBoardShockwave(ctx, ox, oy, board, color, detonateT);
-    drawThunderBurst(ctx, ox, oy, cell, color, detonateT);
+    drawRainbowSupernova(ctx, ox, oy, cell, board, detonateT, progress);
+    drawPrismaticShockwaves(ctx, ox, oy, board, detonateT);
+    drawRainbowBurstRays(ctx, ox, oy, cell, detonateT, progress);
   }
 
   const order = blast.strikeOrder ?? blast.cells;
   const total = Math.max(order.length, 1);
-  const targets = order.map((c) => ({
+  const targets = order.map((c, i) => ({
     x: board.x + c.col * cell + cell / 2,
     y: board.y + c.row * cell + cell / 2,
     cell: c,
+    hue: RAINBOW_PALETTE[i % RAINBOW_PALETTE.length],
   }));
 
-  // Phase 3 — rapid lightning barrage + chain arcs between targets
+  // Phase 3 — cascading rainbow beams to each target
   for (let i = 0; i < total; i++) {
-    const hitAt = (i + 0.3) / (total + 0.6);
-    const boltLife = clamp01((strikePhase - hitAt) / 0.14);
+    const hitAt = (i + 0.25) / (total + 0.5);
+    const boltLife = clamp01((cascadeT - hitAt) / 0.12);
     if (boltLife <= 0) continue;
 
     const tx = targets[i].x;
     const ty = targets[i].y;
-    const fade = 1 - boltLife * 0.65;
-    const seed = i * 5.17 + progress * 9;
+    const fade = (1 - boltLife * 0.7) * (1 - fadeT);
+    const beamColor = targets[i].hue;
+    const seed = i * 4.71 + progress * 11;
 
-    if (boltLife < 0.35) {
-      drawTargetPulse(ctx, tx, ty, cell, color, boltLife / 0.35);
+    drawRainbowBeam(ctx, ox, oy, tx, ty, beamColor, fade, seed, progress);
+    drawRainbowBeam(ctx, ox, oy, tx, ty, targetColor, fade * 0.45, seed + 3.3, progress);
+
+    if (boltLife < 0.4) {
+      drawRainbowTargetPop(ctx, tx, ty, cell, beamColor, boltLife / 0.4);
     }
 
-    drawLightningBolt(ctx, ox, oy, tx, ty, color, fade, seed, true);
-    drawLightningBolt(ctx, ox, oy, tx, ty, color, fade * 0.5, seed + 2.9, false);
-
-    if (boltLife > 0.2) {
-      drawImpactNova(ctx, tx, ty, cell, color, clamp01((boltLife - 0.2) / 0.8));
+    if (boltLife > 0.15) {
+      drawRainbowImpact(ctx, tx, ty, cell, beamColor, targetColor, clamp01((boltLife - 0.15) / 0.85));
     }
 
-    if (i > 0 && boltLife > 0.15) {
+    if (i > 0 && boltLife > 0.12) {
       const prev = targets[i - 1];
-      const chainAlpha = fade * 0.55;
-      drawLightningBolt(ctx, prev.x, prev.y, tx, ty, color, chainAlpha, seed + 11, false);
+      drawRainbowArc(ctx, prev.x, prev.y, tx, ty, prev.hue, fade * 0.5);
     }
   }
 
-  // Lingering electric web over struck cells
-  if (strikePhase > 0.2) {
-    const webAlpha = (1 - clamp01((progress - 0.55) / 0.45)) * 0.35;
-    if (webAlpha > 0.02) {
-      ctx.strokeStyle = `${color}${Math.floor(webAlpha * 255).toString(16).padStart(2, '0')}`;
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      for (let i = 1; i < total; i++) {
-        const a = targets[i - 1];
-        const b = targets[i];
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      }
-      ctx.shadowBlur = 0;
-    }
+  // Phase 4 — confetti + lingering shimmer
+  if (cascadeT > 0.15) {
+    drawRainbowConfetti(ctx, board, ox, oy, cascadeT, fadeT, progress);
   }
 
-  // Target color label — snaps in at detonation
-  if (style && progress > 0.11) {
-    const chipAlpha = clamp01((progress - 0.11) / 0.08) * (progress < 0.82 ? 1 : (1 - progress) / 0.18);
-    ctx.globalAlpha = chipAlpha;
-    const label = style.label.toUpperCase();
-    ctx.font = `bold ${Math.max(12, cell * 0.26)}px system-ui`;
-    const tw = ctx.measureText(label).width + 18;
-    const chipY = oy - cell * 0.88;
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20;
-    roundRect(ctx, ox - tw / 2, chipY, tw, cell * 0.32, 8);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, ox, chipY + cell * 0.16);
-    ctx.globalAlpha = 1;
+  if (progress > 0.14 && progress < 0.88) {
+    const chipAlpha = clamp01((progress - 0.14) / 0.1) * (progress < 0.78 ? 1 : (0.88 - progress) / 0.1);
+    drawRainbowLabel(ctx, ox, oy, cell, targetLabel, targetColor, chipAlpha, progress);
   }
 }
 
-function drawColorVortex(
+function drawRainbowVortex(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   cell: number,
   t: number,
-  color: string,
+  progress: number,
 ): void {
   if (t <= 0) return;
 
-  const squeeze = t < 0.7 ? t / 0.7 : 1 - (t - 0.7) / 0.3;
-  const r = cell * (0.55 - squeeze * 0.25 + (t > 0.7 ? (t - 0.7) * 1.2 : 0));
+  const squeeze = t < 0.65 ? t / 0.65 : 1 - (t - 0.65) / 0.35;
+  const r = cell * (0.5 - squeeze * 0.22 + (t > 0.65 ? (t - 0.65) * 1.4 : 0));
+  const spin = progress * Math.PI * 14;
 
+  const grad = ctx.createConicGradient(spin, cx, cy);
+  RAINBOW_PALETTE.forEach((c, i) => grad.addColorStop(i / RAINBOW_PALETTE.length, c));
   const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
   g.addColorStop(0, 'rgba(255,255,255,0.98)');
-  g.addColorStop(0.15, color);
-  g.addColorStop(0.45, `${color}BB`);
-  g.addColorStop(1, 'rgba(88,28,180,0)');
+  g.addColorStop(0.2, 'rgba(255,255,255,0.6)');
+  g.addColorStop(0.55, 'rgba(255,200,255,0.35)');
+  g.addColorStop(1, 'rgba(80,20,180,0)');
+
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(r, cell * 0.12), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(r, cell * 0.1), 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = `rgba(255,255,255,${0.9 * t})`;
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 20;
-  for (let ring = 0; ring < 2; ring++) {
-    const ringR = cell * (0.3 + ring * 0.15 + t * 0.2);
+  ctx.fillStyle = grad;
+  ctx.globalAlpha = 0.55 * t;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawRainbowOrbitRings(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  cell: number,
+  t: number,
+  progress: number,
+): void {
+  if (t <= 0) return;
+  const spin = progress * Math.PI * 10;
+  for (let i = 0; i < 3; i++) {
+    const color = RAINBOW_PALETTE[(i + Math.floor(progress * 8)) % RAINBOW_PALETTE.length];
+    const ringR = cell * (0.35 + i * 0.14 + t * 0.25);
+    ctx.strokeStyle = color + Math.floor(220 * t).toString(16).padStart(2, '0');
+    ctx.lineWidth = 2.5 - i * 0.4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.arc(cx, cy, ringR, t * Math.PI * 8, t * Math.PI * 8 + Math.PI * 1.4);
+    ctx.arc(cx, cy, ringR, spin + i * 1.2, spin + i * 1.2 + Math.PI * 1.1);
     ctx.stroke();
   }
   ctx.shadowBlur = 0;
 }
 
-function drawColorDetonation(
+function drawRainbowSupernova(
   ctx: CanvasRenderingContext2D,
   ox: number,
   oy: number,
   cell: number,
   board: { x: number; y: number; w: number; h: number },
-  color: string,
   t: number,
+  progress: number,
 ): void {
   const alpha = 1 - t;
-  const maxR = Math.hypot(board.w, board.h) * 0.55;
-  const r = cell * (0.3 + t * maxR / cell * 0.45);
+  const maxR = Math.hypot(board.w, board.h) * 0.6;
+  const r = cell * (0.25 + t * maxR / cell * 0.5);
+  const spin = progress * Math.PI * 6;
 
-  const nova = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
-  nova.addColorStop(0, `rgba(255,255,255,${0.95 * alpha})`);
-  nova.addColorStop(0.12, `${color}${Math.floor(alpha * 220).toString(16).padStart(2, '0')}`);
-  nova.addColorStop(0.45, `rgba(140,80,255,${0.35 * alpha})`);
-  nova.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = nova;
+  const nova = ctx.createConicGradient(spin, ox, oy);
+  RAINBOW_PALETTE.forEach((c, i) => nova.addColorStop(i / RAINBOW_PALETTE.length, c + Math.floor(alpha * 220).toString(16).padStart(2, '0')));
+  const core = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+  core.addColorStop(0, `rgba(255,255,255,${0.98 * alpha})`);
+  core.addColorStop(0.15, `rgba(255,240,200,${0.85 * alpha})`);
+  core.addColorStop(0.5, `rgba(255,120,200,${0.4 * alpha})`);
+  core.addColorStop(1, 'rgba(255,255,255,0)');
+
+  ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(ox, oy, r, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = `rgba(255,255,255,${0.9 * alpha})`;
-  ctx.lineWidth = 4;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 24;
+  ctx.fillStyle = nova;
+  ctx.globalAlpha = alpha * 0.45;
   ctx.beginPath();
-  ctx.moveTo(ox - r * 0.35, oy);
-  ctx.lineTo(ox + r * 0.35, oy);
-  ctx.moveTo(ox, oy - r * 0.35);
-  ctx.lineTo(ox, oy + r * 0.35);
-  ctx.stroke();
+  ctx.arc(ox, oy, r * 1.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Star flare
+  ctx.strokeStyle = `rgba(255,255,255,${0.95 * alpha})`;
+  ctx.lineWidth = 4;
+  ctx.shadowColor = '#FF6B9D';
+  ctx.shadowBlur = 28;
+  for (let i = 0; i < 4; i++) {
+    const ang = spin + (i * Math.PI) / 2;
+    ctx.beginPath();
+    ctx.moveTo(ox - Math.cos(ang) * r * 0.3, oy - Math.sin(ang) * r * 0.3);
+    ctx.lineTo(ox + Math.cos(ang) * r * 0.55, oy + Math.sin(ang) * r * 0.55);
+    ctx.stroke();
+  }
   ctx.shadowBlur = 0;
 }
 
-function drawBoardShockwave(
+function drawPrismaticShockwaves(
   ctx: CanvasRenderingContext2D,
   ox: number,
   oy: number,
   board: { x: number; y: number; w: number; h: number },
-  color: string,
   t: number,
 ): void {
-  const maxR = Math.hypot(board.w, board.h) * 0.65;
-  const r = maxR * easeOutExpo(t);
-  const alpha = (1 - t) * 0.85;
-
-  ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-  ctx.lineWidth = 3 + (1 - t) * 4;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 16;
-  ctx.beginPath();
-  ctx.arc(ox, oy, r, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.strokeStyle = `${color}${Math.floor(alpha * 160).toString(16).padStart(2, '0')}`;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(ox, oy, r * 0.82, 0, Math.PI * 2);
-  ctx.stroke();
+  const maxR = Math.hypot(board.w, board.h) * 0.7;
+  for (let wave = 0; wave < 3; wave++) {
+    const wt = clamp01((t - wave * 0.12) / 0.88);
+    if (wt <= 0) continue;
+    const r = maxR * easeOutExpo(wt);
+    const alpha = (1 - wt) * 0.75;
+    const color = RAINBOW_PALETTE[wave % RAINBOW_PALETTE.length];
+    ctx.strokeStyle = `${color}${Math.floor(alpha * 200).toString(16).padStart(2, '0')}`;
+    ctx.lineWidth = 3 + (1 - wt) * 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(ox, oy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.shadowBlur = 0;
 }
 
-function drawThunderBurst(
+function drawRainbowBurstRays(
   ctx: CanvasRenderingContext2D,
   ox: number,
   oy: number,
   cell: number,
-  color: string,
   t: number,
+  progress: number,
 ): void {
-  const alpha = (1 - t) * 0.95;
-  const len = cell * (0.8 + t * 2.2);
-  const rays = 10;
+  const alpha = (1 - t) * 0.9;
+  const len = cell * (0.9 + t * 2.8);
+  const rays = 12;
 
   for (let i = 0; i < rays; i++) {
-    const ang = (i / rays) * Math.PI * 2 + t * 1.5;
+    const ang = (i / rays) * Math.PI * 2 + progress * 2.2;
+    const color = RAINBOW_PALETTE[i % RAINBOW_PALETTE.length];
     const ex = ox + Math.cos(ang) * len;
     const ey = oy + Math.sin(ang) * len;
-    const jx = ox + Math.cos(ang) * len * 0.45 + Math.sin(ang * 3 + i) * 6;
-    const jy = oy + Math.sin(ang) * len * 0.45 + Math.cos(ang * 3 + i) * 6;
-    drawLightningBolt(ctx, ox, oy, jx, jy, color, alpha * 0.7, i * 2.3 + t * 5, false);
-    drawLightningBolt(ctx, jx, jy, ex, ey, color, alpha * 0.5, i * 3.1 + t * 5, false);
-  }
-}
+    const mid = 0.45 + Math.sin(i * 2.1 + progress * 8) * 0.15;
+    const jx = ox + Math.cos(ang) * len * mid + Math.sin(ang * 3 + i) * 8;
+    const jy = oy + Math.sin(ang) * len * mid + Math.cos(ang * 3 + i) * 8;
 
-function drawTargetPulse(
-  ctx: CanvasRenderingContext2D,
-  tx: number,
-  ty: number,
-  cell: number,
-  color: string,
-  t: number,
-): void {
-  const r = cell * (0.2 + t * 0.35);
-  const alpha = (1 - t) * 0.9;
-  ctx.strokeStyle = `${color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
-  ctx.lineWidth = 3;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.arc(tx, ty, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-}
-
-function drawImpactNova(
-  ctx: CanvasRenderingContext2D,
-  tx: number,
-  ty: number,
-  cell: number,
-  color: string,
-  impact: number,
-): void {
-  const alpha = 1 - impact;
-  const r = cell * (0.2 + impact * 0.7);
-
-  const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, r);
-  g.addColorStop(0, `rgba(255,255,255,${alpha})`);
-  g.addColorStop(0.25, `${color}${Math.floor(alpha * 230).toString(16).padStart(2, '0')}`);
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(tx, ty, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = `rgba(255,255,255,${0.9 * alpha})`;
-  ctx.lineWidth = 3;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 18;
-  ctx.beginPath();
-  ctx.arc(tx, ty, r * 0.65, 0, Math.PI * 2 * impact);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  for (let s = 0; s < 8; s++) {
-    const ang = (s / 8) * Math.PI * 2 + impact * 3;
-    const dist = r * (0.4 + impact);
-    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.9})`;
+    ctx.strokeStyle = `${color}${Math.floor(alpha * 180).toString(16).padStart(2, '0')}`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.arc(tx + Math.cos(ang) * dist, ty + Math.sin(ang) * dist, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(ox, oy);
+    ctx.quadraticCurveTo(jx, jy, ex, ey);
+    ctx.stroke();
   }
+  ctx.shadowBlur = 0;
 }
 
-function drawLightningBolt(
+function drawRainbowBeam(
   ctx: CanvasRenderingContext2D,
   x1: number,
   y1: number,
@@ -715,19 +697,23 @@ function drawLightningBolt(
   color: string,
   alpha: number,
   seed: number,
-  thick: boolean,
+  progress: number,
 ): void {
-  const segments = thick ? 9 : 6;
+  const segments = 10;
   const pts: { x: number; y: number }[] = [{ x: x1, y: y1 }];
+  const perpX = -(y2 - y1);
+  const perpY = x2 - x1;
+  const perpLen = Math.hypot(perpX, perpY) || 1;
+  const wave = Math.sin(progress * Math.PI * 16 + seed) * 18;
 
   for (let i = 1; i < segments; i++) {
     const f = i / segments;
     const px = x1 + (x2 - x1) * f;
     const py = y1 + (y2 - y1) * f;
-    const jitter = (segments - Math.abs(i - segments / 2)) * (thick ? 6 : 3.5);
+    const bulge = Math.sin(f * Math.PI) * wave;
     pts.push({
-      x: px + Math.sin(seed + i * 2.1) * jitter,
-      y: py + Math.cos(seed + i * 1.7) * jitter,
+      x: px + (perpX / perpLen) * bulge + Math.sin(seed + i * 2.3) * 4,
+      y: py + (perpY / perpLen) * bulge + Math.cos(seed + i * 1.9) * 4,
     });
   }
   pts.push({ x: x2, y: y2 });
@@ -737,29 +723,185 @@ function drawLightningBolt(
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  if (thick) {
-    ctx.strokeStyle = color + '66';
-    ctx.lineWidth = 7;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 24;
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
-  }
-
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = thick ? 4 : 2.5;
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = 9;
   ctx.shadowColor = color;
-  ctx.shadowBlur = thick ? 20 : 12;
+  ctx.shadowBlur = 22;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.stroke();
 
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.lineWidth = 4;
+  ctx.shadowBlur = 14;
+  ctx.stroke();
+
   ctx.strokeStyle = color;
-  ctx.lineWidth = thick ? 2 : 1.5;
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Traveling sparkle along beam
+  const sparkF = (progress * 3 + seed * 0.1) % 1;
+  const si = Math.min(segments - 1, Math.floor(sparkF * segments));
+  const sp = pts[si];
+  ctx.fillStyle = '#FFFFFF';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(sp.x, sp.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawRainbowTargetPop(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  cell: number,
+  color: string,
+  t: number,
+): void {
+  const r = cell * (0.15 + t * 0.45);
+  const alpha = (1 - t) * 0.95;
+  ctx.strokeStyle = `${color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.arc(tx, ty, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawRainbowImpact(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  cell: number,
+  beamColor: string,
+  fruitColor: string,
+  impact: number,
+): void {
+  const alpha = 1 - impact;
+  const r = cell * (0.18 + impact * 0.85);
+
+  const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, r);
+  g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  g.addColorStop(0.2, `${fruitColor}${Math.floor(alpha * 240).toString(16).padStart(2, '0')}`);
+  g.addColorStop(0.55, `${beamColor}${Math.floor(alpha * 160).toString(16).padStart(2, '0')}`);
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(tx, ty, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (let s = 0; s < 10; s++) {
+    const ang = (s / 10) * Math.PI * 2 + impact * 4;
+    const dist = r * (0.35 + impact * 0.65);
+    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
+    ctx.beginPath();
+    ctx.arc(tx + Math.cos(ang) * dist, ty + Math.sin(ang) * dist, 2 + (s % 2), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawRainbowArc(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: string,
+  alpha: number,
+): void {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2 - 12;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = color;
   ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.quadraticCurveTo(mx, my, x2, y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRainbowConfetti(
+  ctx: CanvasRenderingContext2D,
+  board: { x: number; y: number; w: number; h: number },
+  ox: number,
+  oy: number,
+  cascadeT: number,
+  fadeT: number,
+  progress: number,
+): void {
+  const alpha = (1 - fadeT) * 0.85;
+  if (alpha < 0.02) return;
+
+  for (let i = 0; i < 36; i++) {
+    const seed = i * 17.3;
+    const color = RAINBOW_PALETTE[i % RAINBOW_PALETTE.length];
+    const ang = seed + progress * 4;
+    const dist = cascadeT * (80 + (i % 7) * 22);
+    const px = ox + Math.cos(ang) * dist * (0.4 + (i % 5) * 0.15);
+    const py = oy + Math.sin(ang) * dist * (0.35 + (i % 4) * 0.18) + cascadeT * 30;
+    if (px < board.x || px > board.x + board.w || py < board.y || py > board.y + board.h) continue;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * (0.5 + (i % 3) * 0.2);
+    ctx.translate(px, py);
+    ctx.rotate(ang + progress * 6);
+    ctx.fillStyle = color;
+    ctx.fillRect(-3, -1.5, 6, 3);
+    ctx.restore();
+  }
+}
+
+function drawRainbowLabel(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  cell: number,
+  targetLabel: string,
+  targetColor: string,
+  chipAlpha: number,
+  progress: number,
+): void {
+  ctx.save();
+  ctx.globalAlpha = chipAlpha;
+  const label = `ALL ${targetLabel.toUpperCase()}!`;
+  ctx.font = `bold ${Math.max(12, cell * 0.24)}px system-ui`;
+
+  const tw = ctx.measureText(label).width + 22;
+  const chipY = oy - cell * 0.92;
+  const hue = (progress * 280) % 360;
+
+  const chipGrad = ctx.createLinearGradient(ox - tw / 2, chipY, ox + tw / 2, chipY + cell * 0.34);
+  chipGrad.addColorStop(0, RAINBOW_PALETTE[0]);
+  chipGrad.addColorStop(0.5, RAINBOW_PALETTE[3]);
+  chipGrad.addColorStop(1, RAINBOW_PALETTE[5]);
+
+  ctx.fillStyle = chipGrad;
+  ctx.shadowColor = targetColor;
+  ctx.shadowBlur = 22;
+  roundRect(ctx, ox - tw / 2, chipY, tw, cell * 0.34, 10);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, ox, chipY + cell * 0.17);
+
+  ctx.strokeStyle = `hsla(${hue}, 100%, 80%, 0.8)`;
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, ox - tw / 2, chipY, tw, cell * 0.34, 10);
   ctx.stroke();
   ctx.restore();
 }
@@ -817,8 +959,8 @@ export function blastCellVanish(
   if (idx < 0) return 0;
 
   const total = Math.max(order.length, 1);
-  const hitAt = 0.13 + ((idx + 0.3) / (total + 0.6)) * 0.62;
-  const strikeDur = 0.1;
+  const hitAt = 0.2 + ((idx + 0.25) / (total + 0.5)) * 0.68;
+  const strikeDur = 0.12;
   const v = clamp01((t - hitAt) / strikeDur);
   return v * v * (2 - v);
 }

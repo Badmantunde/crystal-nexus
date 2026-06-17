@@ -6,6 +6,7 @@ import type { MapNavState } from './MapNavBar';
 export interface TopBannerState {
   level: number;
   rank: string;
+  playerName?: string;
   lives: number;
   livesRegenMs?: number | null;
   score: number;
@@ -142,7 +143,8 @@ export class TopBanner {
     }
 
     this.levelEl.textContent = `LV ${state.level}`;
-    this.rankEl.textContent = state.rank.toUpperCase();
+    const name = 'playerName' in state && state.playerName ? state.playerName : '';
+    this.rankEl.textContent = name ? name.toUpperCase() : state.rank.toUpperCase();
     this.streakEl.textContent = `x${state.streak ?? 1}`;
     this.scoreEl.textContent = state.score.toLocaleString();
 

@@ -1,4 +1,5 @@
 import { FRUIT_URLS, preloadFruitSprites, type FruitKind } from '../candy/fruitAssets';
+import { SoundEngine } from '../audio/SoundEngine';
 
 const SPLASH_ORBIT_FRUITS: FruitKind[] = ['apple', 'orange', 'pear', 'berry', 'grape', 'carrot'];
 
@@ -53,6 +54,12 @@ export class SplashScreen {
     this.startTime = performance.now();
     this.el.classList.add('visible');
     void preloadFruitSprites();
+
+    const unlockAudio = () => {
+      SoundEngine.unlock();
+      this.el.removeEventListener('pointerdown', unlockAudio);
+    };
+    this.el.addEventListener('pointerdown', unlockAudio, { once: true });
 
     const tick = (now: number) => {
       const t = Math.min((now - this.startTime) / this.duration, 1);

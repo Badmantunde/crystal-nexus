@@ -1,6 +1,6 @@
 import type { CrystalCategory } from '@crystal-nexus/shared';
 import { getCandyStyle, type CandyShape } from '../candy/CandyTypes';
-import { getFruitForCategory, getFruitSprite } from '../candy/fruitAssets';
+import { getFruitForCategory, getFruitSprite, getRainbowSprite, RAINBOW_PALETTE } from '../candy/fruitAssets';
 import type { SpecialType } from '../candy/CandyCell';
 
 export function drawCandy(
@@ -16,12 +16,19 @@ export function drawCandy(
     shakeY?: number;
     special?: SpecialType;
     lite?: boolean;
+    animTime?: number;
   } = {},
 ): void {
   const alpha = opts.alpha ?? 1;
   const scale = opts.scale ?? 1;
   const cx = x + (opts.shakeX ?? 0);
   const cy = y + (opts.shakeY ?? 0);
+
+  if (opts.special === 'color') {
+    drawRainbowFruit(ctx, cx, cy, size, scale, alpha, opts.animTime ?? 0, opts.lite);
+    return;
+  }
+
   const fruitKind = getFruitForCategory(category);
   const sprite = fruitKind ? getFruitSprite(fruitKind) : undefined;
 
@@ -93,20 +100,59 @@ function drawSpecialOverlay(
     ctx.lineTo(cx, cy + r * 0.55);
     ctx.lineTo(cx + r * 0.18, cy + r * 0.3);
     ctx.stroke();
-  } else if (special === 'color') {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  }
+
+  ctx.restore();
+}
+
+function drawRainbowFruit(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  scale: number,
+  alpha: number,
+  animTime: number,
+  lite?: boolean,
+): void {
+  const t = animTime * 0.003;
+  const pulse = 1 + Math.sin(t * 2.4) * 0.05;
+  const drawSize = size * 0.98 * scale * pulse;
+
+  if (!lite) {
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.35;
+    for (let i = 0; i < RAINBOW_PALETTE.length; i++) {
+      const ang = t * 1.8 + (i / RAINBOW_PALETTE.length) * Math.PI * 2;
+      const ringR = drawSize * (0.52 + i * 0.04);
+      ctx.strokeStyle = RAINBOW_PALETTE[i];
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = RAINBOW_PALETTE[i];
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, ang, ang + Math.PI * 0.55);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  const sprite = getRainbowSprite();
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  if (sprite) {
+    ctx.shadowColor = '#FF6B9D';
+    ctx.shadowBlur = lite ? 8 : 18;
+    ctx.drawImage(sprite, cx - drawSize / 2, cy - drawSize / 2, drawSize, drawSize);
+  } else {
+    const r = drawSize * 0.42;
+    const grad = ctx.createConicGradient(t * 2, cx, cy);
+    RAINBOW_PALETTE.forEach((c, i) => grad.addColorStop(i / RAINBOW_PALETTE.length, c));
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.28, 0, Math.PI * 2);
+    star(ctx, cx, cy, r, r * 0.48, 5);
     ctx.fill();
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#FFD54F';
-    ctx.lineWidth = Math.max(2, r * 0.1);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2);
-    ctx.stroke();
   }
 
   ctx.restore();

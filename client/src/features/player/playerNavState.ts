@@ -5,6 +5,7 @@ import {
   countTotalStars,
   getMapStreak,
   getPlayerCoins,
+  getPlayerName,
   getProfileScore,
   getRankFromStars,
 } from './PlayerProfile';
@@ -20,6 +21,7 @@ export function buildMapNavState(opts: {
   return {
     level: opts.level,
     rank: getRankFromStars(totalStars).name,
+    playerName: getPlayerName(),
     lives: opts.lives,
     livesRegenMs: opts.livesRegenMs,
     coins: getPlayerCoins(),

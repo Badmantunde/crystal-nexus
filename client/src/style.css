@@ -923,7 +923,7 @@ textarea {
 
 .map-node-skip {
   display: block;
-  margin: 4px auto 0;
+  margin: 0;
   padding: 4px 10px;
   border-radius: 500px;
   border: 1px solid rgba(255, 201, 0, 0.45);
@@ -2345,6 +2345,13 @@ textarea {
   justify-content: flex-end;
 }
 
+.map-node-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .map-node {
   position: relative;
   display: flex;
@@ -2447,4 +2454,334 @@ textarea {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
+}
+
+/* ── Combo meter juice ── */
+.hud-combo-card--hot {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
+}
+
+.hud-combo-card--fire {
+  animation: comboPulse 0.55s ease-in-out infinite alternate;
+  border-color: rgba(255, 120, 60, 0.85);
+}
+
+@keyframes comboPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
+}
+
+/* ── Guide onboarding (Zap mascot) ── */
+.guide-onboard {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 8, 28, 0.88);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.32s ease;
+}
+
+.guide-onboard.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.guide-onboard.hidden {
+  display: none;
+}
+
+.guide-onboard-panel {
+  width: min(100%, 380px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.guide-onboard-mascot-wrap {
+  position: relative;
+}
+
+.guide-onboard-mascot {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 180, 60, 0.85);
+  box-shadow: 0 8px 28px rgba(255, 140, 0, 0.35);
+  object-fit: cover;
+  background: #fff;
+}
+
+.guide-onboard-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8c00, #ff5500);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.guide-onboard-bubble {
+  width: 100%;
+  padding: 18px 18px 16px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(20, 14, 48, 0.96), rgba(10, 8, 30, 0.94));
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.guide-onboard-kicker {
+  margin: 0 0 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(198, 214, 255, 0.6);
+}
+
+.guide-onboard-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.guide-onboard-speech {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: rgba(232, 230, 255, 0.9);
+}
+
+.guide-onboard-field {
+  margin-bottom: 12px;
+}
+
+.guide-onboard-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(198, 214, 255, 0.65);
+}
+
+.guide-onboard-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  background: rgba(8, 10, 28, 0.75);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.guide-onboard-input:focus {
+  outline: none;
+  border-color: #ff9f43;
+  box-shadow: 0 0 0 3px rgba(255, 159, 67, 0.25);
+}
+
+.guide-onboard-input--error {
+  animation: guideInputShake 0.35s ease;
+  border-color: #f87171;
+}
+
+@keyframes guideInputShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.guide-onboard-btn {
+  width: 100%;
+}
+
+/* ── In-game guide bubble ── */
+.guide-character {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 14;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.guide-character.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.guide-character.hidden {
+  display: none;
+}
+
+.guide-character-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.guide-character-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #ff9f43;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: #fff;
+}
+
+.guide-character-bubble {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(8, 10, 28, 0.92);
+  border: 1px solid rgba(255, 159, 67, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.guide-character-name {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffb366;
+  margin-bottom: 2px;
+}
+
+.guide-character-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #f0f0ff;
+}
+
+/* ── Responsive breakpoints ── */
+@media (max-width: 380px) {
+  .hud-board-stats {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .hud-score-card,
+  .hud-moves-card,
+  .hud-combo-card {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 54px;
+    min-height: 54px;
+    padding: 5px 6px;
+  }
+
+  .hud-combo-card {
+    max-width: 72px;
+  }
+
+  .hud-moves-value,
+  .hud-combo-value {
+    font-size: 1.1rem;
+  }
+
+  .hud-diff-pill {
+    width: 118px;
+    height: 36px;
+  }
+
+  .hud-diff-pill-text {
+    font-size: 20px;
+  }
+
+  .hud-diff-pill.diff-monster .hud-diff-pill-text {
+    font-size: 16px;
+  }
+
+  .cn-top-banner {
+    max-width: 100%;
+    padding-top: 6px;
+  }
+}
+
+@media (max-height: 700px) {
+  .hud {
+    gap: 4px;
+    padding-top: max(4px, env(safe-area-inset-top));
+  }
+
+  .hud-board-stats {
+    margin-bottom: 8px;
+  }
+
+  .hud-score-card,
+  .hud-moves-card,
+  .hud-combo-card {
+    height: 50px;
+    min-height: 50px;
+  }
+
+  .hud-side-toolbar {
+    gap: 8px;
+  }
+
+  .hud-icon-btn {
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+  }
+
+  .guide-character {
+    bottom: max(52px, calc(env(safe-area-inset-bottom) + 48px));
+  }
+}
+
+.hud-board-footer--compact .hud-board-footer-row {
+  gap: 6px;
+}
+
+.hud-board-footer--compact .hud-diff-pill {
+  width: 118px;
+  height: 36px;
+}
+
+.hud-board-footer--compact .hud-diff-pill-text {
+  font-size: 22px;
+}
+
+.hud-side-toolbar--compact {
+  gap: 6px;
+}
+
+@media (min-width: 520px) {
+  #game-container {
+    padding: 12px;
+  }
+
+  #render-canvas,
+  #game-canvas {
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  }
 }
