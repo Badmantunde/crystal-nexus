@@ -63,6 +63,7 @@ const GAME_BOARD_VIEWBOX = 350;
 const GAME_BOARD_GRID_X = 7;
 const GAME_BOARD_GRID_Y = 6.5;
 const GAME_BOARD_GRID_SIZE = 336;
+const HUD_BOARD_GAP = 40;
 
 type Phase = 'idle' | 'swap' | 'revert' | 'blast' | 'shake' | 'vanish' | 'fall' | 'pause';
 
@@ -348,7 +349,7 @@ export class CanvasGame {
     this.boardLayerKey = '';
   }
 
-  /** Keep 20px between HUD cards and the top of the game board art. */
+  /** Keep HUD_BOARD_GAP between target/moves cards and the top of the game board art. */
   private boardImageTopForLayout(top: number, w: number, h: number, pad: number): number {
     const boardW = w - pad * 2;
     const boardH = h - top - pad;
@@ -369,7 +370,7 @@ export class CanvasGame {
     let targetImageTop = 168;
     if (this.visible && stats && canvasRect.height > 0) {
       const statsRect = stats.getBoundingClientRect();
-      targetImageTop = statsRect.bottom - canvasRect.top + 10;
+      targetImageTop = statsRect.bottom - canvasRect.top + HUD_BOARD_GAP;
       targetImageTop = Math.max(120, Math.min(targetImageTop, h - 200));
     }
 
