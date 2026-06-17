@@ -1,8 +1,8 @@
 import { buildLevelConfig } from './LevelScript';
+import { TOTAL_LEVELS } from './Chapters';
 import type { Difficulty } from './LevelDifficulty';
 
 const STORAGE_KEY = 'crystal-nexus-progress';
-const TOTAL_LEVELS = 30;
 
 export interface LevelInfo {
   level: number;

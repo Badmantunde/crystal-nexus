@@ -1,3 +1,5 @@
+import { LEVELS_PER_CHAPTER } from './Chapters';
+
 export type Difficulty = 'easy' | 'hard' | 'monster';
 
 /** Pacing tier — mapped to board themes via `tierToDifficulty`. */
@@ -80,18 +82,18 @@ export const STAGE_THEMES: Record<Difficulty, StageTheme> = {
 };
 
 /**
- * Curriculum pacing — no random beast rolls.
- * Positions 1–6 within each chapter: teach → boss (5) → breather (6).
+ * Curriculum pacing — positions within each chapter (10 levels):
+ * mid-chapter boss (5), breather (6), chapter finale (10).
  */
 export function getTierForLevel(level: number): LevelTier {
-  const pos = ((level - 1) % 6) + 1;
+  const pos = ((level - 1) % LEVELS_PER_CHAPTER) + 1;
 
   if (level <= 4) return 'tutorial';
-  if (pos === 5) return 'beast';
+  if (pos === 5 || pos === 10) return 'beast';
   if (pos === 6) return 'relaxed';
 
-  if (level <= 12) return 'relaxed';
-  if (level <= 24) return 'normal';
+  if (level <= 30) return 'relaxed';
+  if (level <= 70) return 'normal';
   return 'hard';
 }
 
@@ -109,7 +111,7 @@ export function getDifficultyForLevel(level: number): Difficulty {
 export function buildFormulaLevelConfig(level: number): LevelConfig {
   const tier = getTierForLevel(level);
   const difficulty = tierToDifficulty(tier);
-  const chapter = Math.ceil(level / 6);
+  const chapter = Math.ceil(level / LEVELS_PER_CHAPTER);
   const baseTarget = 400 + (level - 1) * 80 + chapter * 100;
 
   return {

@@ -1,8 +1,8 @@
 import type { Difficulty } from '../player/LevelDifficulty';
 import { getDifficultyForLevel } from '../player/LevelDifficulty';
 
-/** Tiles per folder: `tile 01.svg` … `tile 20.svg` */
-export const TILE_COUNT = 20;
+/** Tiles per folder: `tile 01.svg` … `tile 100.svg` */
+export const TILE_COUNT = 100;
 
 export const TILE_FOLDERS = {
   inactive: 'level-inactive-svg',
@@ -17,14 +17,14 @@ const ACTIVE_FOLDER: Record<Difficulty, string> = {
   monster: TILE_FOLDERS.monster,
 };
 
-/** Level 1 → tile 01, level 2 → tile 02, … wraps after tile 20. */
+/** Level N maps to tile file `tile NN.svg` (1–100). */
 export function getLevelMapTileIndex(level: number): number {
-  const lv = Math.max(1, level);
-  return ((lv - 1) % TILE_COUNT) + 1;
+  return Math.min(TILE_COUNT, Math.max(1, level));
 }
 
 export function formatTileFileName(tileIndex: number): string {
-  return `tile ${String(tileIndex).padStart(2, '0')}.svg`;
+  const digits = tileIndex >= 100 ? 3 : 2;
+  return `tile ${String(tileIndex).padStart(digits, '0')}.svg`;
 }
 
 function folderForLevel(level: number, unlocked: boolean): string {
