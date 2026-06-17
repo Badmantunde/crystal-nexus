@@ -31,6 +31,7 @@ export class LevelMap {
   private progress: LevelProgress;
   private lives: LivesManager;
   private onSelect: ((level: number) => void) | null = null;
+  private onDayChallengePlay: (() => void) | null = null;
   private regenTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(containerId = 'menu-overlay') {
@@ -66,8 +67,14 @@ export class LevelMap {
     this.nav.setOnAddLives(() => this.shopModal.show('lives'));
     this.nav.setOnAddCoins(() => this.shopModal.show('coins'));
     this.nav.setOnDayChallenge(() => this.dayChallengeModal.show());
+    this.dayChallengeModal.setOnPlay(() => this.onDayChallengePlay?.());
+    this.dayChallengeModal.setOnChange(() => this.updateNav(this.progress.getUnlockedLevel()));
     this.shopModal.setOnChange(() => this.updateNav(this.progress.getUnlockedLevel()));
     this.noLivesModal.setOnShop(() => this.shopModal.show('lives'));
+  }
+
+  setOnDayChallengePlay(handler: () => void): void {
+    this.onDayChallengePlay = handler;
   }
 
   show(onSelect: (level: number) => void): void {

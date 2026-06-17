@@ -809,6 +809,67 @@ textarea {
   color: #ffc900;
 }
 
+.map-nav-day {
+  position: relative;
+}
+
+.map-nav-day-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff3b5c;
+  border: 2px solid #0b2f8a;
+  box-shadow: 0 0 8px rgba(255, 59, 92, 0.65);
+}
+
+.day-challenge-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.day-challenge-actions .cn-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-challenge-play-hint {
+  margin: 0 0 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #ffe8a8;
+}
+
+.day-challenge-message {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fca5a5;
+}
+
+.day-result-card {
+  max-width: 320px;
+  text-align: center;
+}
+
+.day-result-title {
+  margin: 8px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.hud-target-card--rush .hud-card-label {
+  color: #ffe8a8;
+}
+
+.hud-target-card--rush .hud-target-progress-fill {
+  background: linear-gradient(90deg, #ffc900, #fa9909);
+}
+
 .cn-stat-pill--coins .cn-stat-pill-value {
   color: #ffe8a8;
 }

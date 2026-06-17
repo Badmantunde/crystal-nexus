@@ -64,7 +64,11 @@ export const CANDY_STYLES: Record<string, CandyStyle> = {
 };
 
 export function randomCandyType(): CrystalCategory {
-  return BOARD_FRUIT_CATEGORIES[Math.floor(Math.random() * BOARD_FRUIT_CATEGORIES.length)];
+  return randomCandyTypeFromRng(Math.random);
+}
+
+export function randomCandyTypeFromRng(rng: () => number): CrystalCategory {
+  return BOARD_FRUIT_CATEGORIES[Math.floor(rng() * BOARD_FRUIT_CATEGORIES.length)];
 }
 
 export function getCandyStyle(category: CrystalCategory): CandyStyle {

@@ -17,7 +17,15 @@ import {
   praiseForSpawn,
 } from '../ui/PraiseSystem';
 import { LevelCompleteCard, calcStars } from '../ui/LevelCompleteCard';
+import { DayChallengeResultCard } from '../ui/DayChallengeResultCard';
 import { coinsForStars, grantCoins } from '../player/Economy';
+import {
+  buildDayChallengeConfig,
+  consumeDayChallengeEntry,
+  getDayChallengeStreak,
+  recordDayChallengeResult,
+  type DayChallengeConfig,
+} from '../player/DayChallenge';
 import { LevelWelcomeCard } from '../ui/LevelWelcomeCard';
 import { QuitConfirmModal } from '../ui/QuitConfirmModal';
 import { LivesManager, MAX_LIVES, formatRegenCountdown } from '../player/Lives';
@@ -70,6 +78,8 @@ interface AnimCell {
   vanishT: number;
 }
 
+type GameMode = 'story' | 'day';
+
 export class CanvasGame {
   onReturnToMap: (() => void) | null = null;
   private canvas: HTMLCanvasElement;
@@ -78,6 +88,7 @@ export class CanvasGame {
   private hud: HUD;
   private praise: PraiseOverlay;
   private levelCard: LevelCompleteCard;
+  private dayResultCard: DayChallengeResultCard;
   private levelWelcome: LevelWelcomeCard;
   private quitModal: QuitConfirmModal;
   private level = 1;
@@ -86,6 +97,8 @@ export class CanvasGame {
   private stageTheme: StageTheme = getStageTheme('easy');
   private peakCombo = 0;
   private lastCoinsEarned = 0;
+  private gameMode: GameMode = 'story';
+  private dayConfig: DayChallengeConfig | null = null;
   private levelEnded = false;
   private phase: Phase = 'idle';
   private drag: DragState | null = null;
@@ -137,6 +150,7 @@ export class CanvasGame {
     this.levelProgress = new LevelProgress();
     this.praise = new PraiseOverlay();
     this.levelCard = new LevelCompleteCard();
+    this.dayResultCard = new DayChallengeResultCard();
     this.levelWelcome = new LevelWelcomeCard();
     this.quitModal = new QuitConfirmModal();
     this.board = new SimpleBoard(ROWS, COLS, 30);
@@ -191,17 +205,26 @@ export class CanvasGame {
     clearDifficultyThemeClass();
     this.levelWelcome.hide();
     this.levelCard.hide();
+    this.dayResultCard.hide();
     this.quitModal.hide();
     this.phase = 'idle';
   }
 
   beginLevel(level: number): void {
+    this.gameMode = 'story';
+    this.dayConfig = null;
     if (!this.lives.canPlay()) {
       this.showNoLivesToast();
       this.onReturnToMap?.();
       return;
     }
     this.startLevel(level);
+  }
+
+  beginDayChallenge(): void {
+    this.gameMode = 'day';
+    this.dayConfig = buildDayChallengeConfig();
+    this.startDayChallenge();
   }
 
   private showNoLivesToast(): void {
@@ -668,13 +691,31 @@ export class CanvasGame {
   }
 
   private updateHud(): void {
+    const nav = buildMapNavState({
+      level: this.gameMode === 'day' ? this.levelProgress.getUnlockedLevel() : this.level,
+      lives: this.lives.getLives(),
+      livesRegenMs: this.lives.getNextRegenMs(),
+      progress: this.levelProgress,
+    });
+
+    if (this.gameMode === 'day' && this.dayConfig) {
+      this.hud.update({
+        nav,
+        score: this.board.getScore(),
+        moves: this.board.getMoves(),
+        level: nav.level,
+        maxLives: MAX_LIVES,
+        targetTask: 'rush',
+        rushCoins: this.board.getRushCoins(),
+        rushTarget: this.dayConfig.rushTarget,
+        difficultyClass: 'hud-theme-easy',
+        difficultyTag: 'RUSH',
+      });
+      return;
+    }
+
     this.hud.update({
-      nav: buildMapNavState({
-        level: this.level,
-        lives: this.lives.getLives(),
-        livesRegenMs: this.lives.getNextRegenMs(),
-        progress: this.levelProgress,
-      }),
+      nav,
       score: this.board.getScore(),
       moves: this.board.getMoves(),
       level: this.level,
@@ -694,7 +735,16 @@ export class CanvasGame {
 
   private restartLevel(): void {
     if (!this.visible || this.levelEnded) return;
-    if (this.levelCard.isVisible() || this.levelWelcome.isVisible() || this.quitModal.isVisible()) {
+    if (
+      this.levelCard.isVisible() ||
+      this.dayResultCard.isVisible() ||
+      this.levelWelcome.isVisible() ||
+      this.quitModal.isVisible()
+    ) {
+      return;
+    }
+    if (this.gameMode === 'day') {
+      this.startDayChallenge();
       return;
     }
     if (!this.lives.canPlay()) {
@@ -711,8 +761,11 @@ export class CanvasGame {
 
   private quitToMap(): void {
     this.levelEnded = true;
-    this.lives.loseLife();
+    if (this.gameMode === 'story') {
+      this.lives.loseLife();
+    }
     this.levelCard.hide();
+    this.dayResultCard.hide();
     this.quitModal.hide();
     this.onReturnToMap?.();
   }
@@ -722,13 +775,19 @@ export class CanvasGame {
       !this.visible ||
       this.levelEnded ||
       this.levelCard.isVisible() ||
+      this.dayResultCard.isVisible() ||
       this.levelWelcome.isVisible() ||
       this.quitModal.isVisible()
     );
   }
 
   private checkWin(): void {
-    if (this.levelCard.isVisible()) return;
+    if (this.levelCard.isVisible() || this.dayResultCard.isVisible()) return;
+
+    if (this.gameMode === 'day' && this.dayConfig) {
+      this.checkDayChallengeWin();
+      return;
+    }
 
     const target = this.getTargetScore();
     const score = this.board.getScore();
@@ -752,6 +811,63 @@ export class CanvasGame {
       this.updateHud();
       setTimeout(() => this.showLevelEndCard(false), 400);
     }
+  }
+
+  private checkDayChallengeWin(): void {
+    if (!this.dayConfig) return;
+
+    const rushCoins = this.board.getRushCoins();
+    const movesLeft = this.board.getMoves();
+    const won = rushCoins >= this.dayConfig.rushTarget;
+
+    if (won) {
+      this.levelEnded = true;
+      this.praise.show({ text: 'Challenge Clear!', tier: 'legendary', sub: 'Coin Rush' }, 1800);
+      setTimeout(() => this.showDayEndCard(true), 600);
+    } else if (movesLeft <= 0) {
+      this.levelEnded = true;
+      setTimeout(() => this.showDayEndCard(false), 400);
+    }
+  }
+
+  private showDayEndCard(won: boolean): void {
+    if (!this.dayConfig || this.dayResultCard.isVisible()) return;
+
+    const rewards = recordDayChallengeResult({
+      dateKey: this.dayConfig.dateKey,
+      won,
+      rushCoins: this.board.getRushCoins(),
+      score: this.board.getScore(),
+      peakCombo: this.peakCombo,
+    });
+
+    this.dayResultCard.show(
+      {
+        rushCoins: this.board.getRushCoins(),
+        rushTarget: this.dayConfig.rushTarget,
+        score: this.board.getScore(),
+        movesLeft: this.board.getMoves(),
+        maxCombo: this.peakCombo,
+        won,
+        coinsEarned: rewards.total,
+        beatBest: rewards.beatBest,
+        streak: won ? getDayChallengeStreak() : 0,
+      },
+      {
+        onMap: () => this.onReturnToMap?.(),
+        onRetry: () => {
+          const entry = consumeDayChallengeEntry(this.dayConfig!.dateKey);
+          if (!entry.ok) {
+            this.hud.showToast(entry.message, 3500);
+            this.onReturnToMap?.();
+            return;
+          }
+          this.levelEnded = false;
+          this.startDayChallenge();
+        },
+        canRetry: true,
+      },
+    );
   }
 
   private showLevelEndCard(won: boolean): void {
@@ -794,7 +910,40 @@ export class CanvasGame {
     );
   }
 
+  private startDayChallenge(): void {
+    if (!this.dayConfig) return;
+
+    this.level = 0;
+    this.peakCombo = 0;
+    this.levelEnded = false;
+    this.board = new SimpleBoard(ROWS, COLS, this.dayConfig.moves, {
+      seed: this.dayConfig.seed,
+      coinRush: true,
+    });
+    this.phase = 'idle';
+    this.swipeLock = false;
+    this.stageTheme = getStageTheme('easy');
+    applyDifficultyThemeClass('hud-theme-easy');
+    this.invalidateBoardLayer();
+    this.quitModal.hide();
+    this.levelCard.hide();
+    this.dayResultCard.hide();
+
+    this.updateHud();
+    this.resize();
+    requestAnimationFrame(() => {
+      if (this.visible) this.resize();
+    });
+    this.markDirty();
+    this.hud.showToast(
+      `Coin Rush — collect ${this.dayConfig.rushTarget} coins in ${this.dayConfig.moves} moves`,
+      4200,
+    );
+  }
+
   private startLevel(level: number): void {
+    this.gameMode = 'story';
+    this.dayConfig = null;
     this.level = level;
     this.levelConfig = buildLevelConfig(level);
     this.levelTarget = buildLevelTarget(

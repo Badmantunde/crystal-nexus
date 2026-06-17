@@ -1,5 +1,6 @@
 import type { CrystalCategory } from '@crystal-nexus/shared';
-import { randomCandyType } from '../candy/CandyTypes';
+import { randomCandyType, randomCandyTypeFromRng } from '../candy/CandyTypes';
+import { mulberry32 } from '../player/DayChallenge';
 import { makeCandy, isSpecial, cellCategory, type CandyCell, type SpecialType } from '../candy/CandyCell';
 
 export interface CellPos {
@@ -43,6 +44,11 @@ export interface FallMove {
   isNew: boolean;
 }
 
+export interface SimpleBoardOptions {
+  seed?: number;
+  coinRush?: boolean;
+}
+
 export class SimpleBoard {
   readonly rows: number;
   readonly cols: number;
@@ -50,14 +56,19 @@ export class SimpleBoard {
   private _score = 0;
   private _moves = 30;
   private _combo = 0;
+  private _rushCoins = 0;
+  private coinRush: boolean;
+  private rng: () => number;
   private collected: Partial<Record<CrystalCategory, number>> = {};
   private lastPivot: CellPos | null = null;
   private lastSwipeAxis: SwipeAxis = 'horizontal';
 
-  constructor(rows = 8, cols = 8, moves = 30) {
+  constructor(rows = 8, cols = 8, moves = 30, options: SimpleBoardOptions = {}) {
     this.rows = rows;
     this.cols = cols;
     this._moves = moves;
+    this.coinRush = options.coinRush ?? false;
+    this.rng = options.seed != null ? mulberry32(options.seed) : Math.random;
     this.grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
     this.fill();
     while (this.findMatches().length > 0) this.refillRandom();
@@ -88,7 +99,14 @@ export class SimpleBoard {
     return this.collected;
   }
 
+  getRushCoins(): number {
+    return this._rushCoins;
+  }
+
   private tallyClears(cells: CellPos[]): void {
+    if (this.coinRush) {
+      this._rushCoins += cells.length;
+    }
     for (const { row, col } of cells) {
       const cat = cellCategory(this.grid[row][col]);
       if (cat) this.collected[cat] = (this.collected[cat] ?? 0) + 1;
@@ -530,7 +548,7 @@ export class SimpleBoard {
       while (writeRow >= 0) {
         spawned++;
         moves.push({
-          candy: makeCandy(randomCandyType()),
+          candy: makeCandy(randomCandyTypeFromRng(this.rng)),
           col: c,
           fromRow: -spawned,
           toRow: writeRow,
@@ -587,7 +605,7 @@ export class SimpleBoard {
     for (let c = 0; c < this.cols; c++) {
       for (let r = 0; r < this.rows; r++) {
         if (this.grid[r][c] === null) {
-          this.grid[r][c] = makeCandy(randomCandyType());
+          this.grid[r][c] = makeCandy(randomCandyTypeFromRng(this.rng));
         }
       }
     }
@@ -600,7 +618,7 @@ export class SimpleBoard {
   private fill(): void {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        this.grid[r][c] = makeCandy(randomCandyType());
+        this.grid[r][c] = makeCandy(randomCandyTypeFromRng(this.rng));
       }
     }
   }
@@ -608,7 +626,7 @@ export class SimpleBoard {
   private refillRandom(): void {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        this.grid[r][c] = makeCandy(randomCandyType());
+        this.grid[r][c] = makeCandy(randomCandyTypeFromRng(this.rng));
       }
     }
   }

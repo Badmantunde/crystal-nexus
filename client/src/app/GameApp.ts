@@ -11,6 +11,7 @@ export class GameApp {
   constructor(container: HTMLElement) {
     this.container = container;
     this.map = new LevelMap();
+    this.map.setOnDayChallengePlay(() => this.startDayChallenge());
 
     const splash = new SplashScreen();
     splash.show(() => this.openMap());
@@ -25,12 +26,23 @@ export class GameApp {
     this.map.refresh();
     this.map.show((level) => {
       this.map.hide();
-      if (!this.game) {
-        this.game = new CanvasGame(this.container);
-        this.game.onReturnToMap = () => this.openMap();
-      }
-      this.game.show();
-      this.game.beginLevel(level);
+      this.ensureGame();
+      this.game!.show();
+      this.game!.beginLevel(level);
     });
+  }
+
+  private startDayChallenge(): void {
+    this.map.hide();
+    this.ensureGame();
+    this.game!.show();
+    this.game!.beginDayChallenge();
+  }
+
+  private ensureGame(): void {
+    if (!this.game) {
+      this.game = new CanvasGame(this.container);
+      this.game.onReturnToMap = () => this.openMap();
+    }
   }
 }

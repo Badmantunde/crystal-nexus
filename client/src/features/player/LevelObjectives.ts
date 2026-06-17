@@ -2,7 +2,7 @@ import { CrystalCategory } from '@crystal-nexus/shared';
 import type { LevelTier } from './LevelDifficulty';
 
 export type FruitId = 'orange' | 'apple' | 'pear';
-export type TargetTaskType = 'score' | 'collect';
+export type TargetTaskType = 'score' | 'collect' | 'rush';
 
 export interface LevelObjective {
   fruit: FruitId;

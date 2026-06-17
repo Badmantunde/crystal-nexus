@@ -9,6 +9,7 @@ export interface MapNavState {
   coins: number;
   score: number;
   streak?: number;
+  dayChallengeNew?: boolean;
 }
 
 export interface MapNavBarOptions {
@@ -55,7 +56,10 @@ export class MapNavBar {
             <img src="${a.add}" width="18" height="18" alt="" />
           </button>
         </div>
-        <button type="button" class="map-pill map-pill--solo map-pill--day map-nav-day" id="map-nav-day">Day Challenge</button>
+        <button type="button" class="map-pill map-pill--solo map-pill--day map-nav-day" id="map-nav-day">
+          Day Challenge
+          <span class="map-nav-day-dot" id="map-nav-day-dot" hidden aria-hidden="true"></span>
+        </button>
       </div>
       <div class="map-nav-col map-nav-col--right">
         <div class="map-pill map-pill--level">
@@ -133,6 +137,9 @@ export class MapNavBar {
     this.rankEl.textContent = state.rank.toUpperCase();
     this.scoreEl.textContent = state.score.toLocaleString();
     this.streakEl.textContent = `x${state.streak ?? 1}`;
+
+    const dayDot = this.root.querySelector('#map-nav-day-dot') as HTMLElement;
+    if (dayDot) dayDot.hidden = !state.dayChallengeNew;
   }
 
   shakeLives(): void {

@@ -1,5 +1,6 @@
 import type { MapNavState } from '../ui/MapNavBar';
 import type { LevelProgress } from './LevelProgress';
+import { hasUnplayedDayChallenge } from './DayChallenge';
 import {
   countTotalStars,
   getMapStreak,
@@ -24,5 +25,6 @@ export function buildMapNavState(opts: {
     coins: getPlayerCoins(),
     score: getProfileScore(opts.progress),
     streak: getMapStreak(totalStars),
+    dayChallengeNew: hasUnplayedDayChallenge(),
   };
 }
