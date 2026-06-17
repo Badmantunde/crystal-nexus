@@ -10,7 +10,7 @@ export class FusionSystem {
   findRecipe(a: CrystalCategory, b: CrystalCategory): FusionRecipe | null {
     return (
       FUSION_RECIPES.find(
-        (r) =>
+        (r: FusionRecipe) =>
           (r.inputs[0] === a && r.inputs[1] === b) ||
           (r.inputs[0] === b && r.inputs[1] === a),
       ) ?? null

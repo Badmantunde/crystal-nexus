@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      '@crystal-nexus/shared': resolve(__dirname, '../packages/shared/src/index.ts'),
     },
   },
   server: {

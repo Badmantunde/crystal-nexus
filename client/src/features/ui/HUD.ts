@@ -1,4 +1,4 @@
-import { TopBanner, type TopBannerState } from './TopBanner';
+import { MapNavBar, type MapNavState } from './MapNavBar';
 import type { LevelObjective, TargetTaskType } from '../player/LevelObjectives';
 import { getObjectiveRemainingCount } from '../player/LevelObjectives';
 import type { FruitKind } from '../candy/fruitAssets';
@@ -13,15 +13,11 @@ function hudFruitImg(kind: FruitKind): string {
 }
 
 export interface HUDState {
+  nav: MapNavState;
   score: number;
   moves: number;
-  combo: number;
   level: number;
-  lives: number;
   maxLives: number;
-  livesRegenMs?: number | null;
-  rank: string;
-  difficultyLabel?: string;
   difficultyClass?: string;
   difficultyTag?: string;
   targetTask?: TargetTaskType;
@@ -33,7 +29,7 @@ export interface HUDState {
 
 export class HUD {
   private hudRoot: HTMLElement;
-  private banner: TopBanner;
+  private nav: MapNavBar;
   private targetCardEl: HTMLElement;
   private targetScoreValEl: HTMLElement;
   private targetProgressFillEl: HTMLElement;
@@ -124,9 +120,7 @@ export class HUD {
     `;
 
     this.hudRoot = container.querySelector('.hud')!;
-    this.banner = new TopBanner(container.querySelector('#hud-banner-slot')!, {
-      showQuit: false,
-    });
+    this.nav = new MapNavBar(container.querySelector('#hud-banner-slot')!, { compact: true });
     this.targetCardEl = container.querySelector('#hud-target-card')!;
     this.targetScoreValEl = container.querySelector('#hud-target-score-val')!;
     this.targetProgressFillEl = container.querySelector('#hud-target-progress-fill')!;
@@ -192,15 +186,7 @@ export class HUD {
   }
 
   update(state: HUDState): void {
-    const bannerState: TopBannerState = {
-      level: state.level,
-      rank: state.rank,
-      lives: state.lives,
-      livesRegenMs: state.livesRegenMs,
-      combo: state.combo,
-      score: state.score,
-    };
-    this.banner.update(bannerState);
+    this.nav.update(state.nav);
 
     this.movesEl.textContent = String(state.moves);
 
@@ -243,6 +229,10 @@ export class HUD {
     } else {
       this.messageEl.classList.remove('visible');
     }
+  }
+
+  shakeLives(): void {
+    this.nav.shakeLives();
   }
 
   showToast(text: string, durationMs = 2000): void {

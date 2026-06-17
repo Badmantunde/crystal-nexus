@@ -11,6 +11,11 @@ export interface MapNavState {
   streak?: number;
 }
 
+export interface MapNavBarOptions {
+  /** Hide Mission pill (in-game HUD). */
+  compact?: boolean;
+}
+
 export class MapNavBar {
   private root: HTMLElement;
   private livesIconEl: HTMLImageElement;
@@ -24,10 +29,11 @@ export class MapNavBar {
   private onAddCoins: (() => void) | null = null;
   private onMission: (() => void) | null = null;
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, options: MapNavBarOptions = {}) {
+    const compact = options.compact ?? false;
     const a = MAP_NAV;
     this.root = document.createElement('nav');
-    this.root.className = 'map-nav';
+    this.root.className = `map-nav${compact ? ' map-nav--compact' : ''}`;
     this.root.setAttribute('aria-label', 'World map status');
     this.root.innerHTML = `
       <div class="map-nav-col map-nav-col--left">
@@ -36,20 +42,20 @@ export class MapNavBar {
             <img class="map-pill-icon map-pill-icon--live" id="map-nav-lives-icon" src="${a.live}" width="28" height="28" alt="" />
             <span class="map-pill-text" id="map-nav-lives-text">FULL</span>
           </div>
-          <button type="button" class="map-add-btn" id="map-nav-add-lives" aria-label="Get more lives">
+          <button type="button" class="map-add-btn map-add-btn--lives" aria-label="Get more lives">
             <img src="${a.add}" width="18" height="18" alt="" />
           </button>
         </div>
         <div class="map-nav-row">
           <div class="map-pill map-pill--coins">
             <img class="map-pill-icon" src="${a.money}" width="26" height="26" alt="" />
-            <span class="map-pill-text" id="map-nav-coins">0</span>
+            <span class="map-pill-text map-nav-coins">0</span>
           </div>
-          <button type="button" class="map-add-btn" id="map-nav-add-coins" aria-label="Get more coins">
+          <button type="button" class="map-add-btn map-add-btn--coins" aria-label="Get more coins">
             <img src="${a.add}" width="18" height="18" alt="" />
           </button>
         </div>
-        <button type="button" class="map-pill map-pill--solo map-pill--mission" id="map-nav-mission">Mission</button>
+        <button type="button" class="map-pill map-pill--solo map-pill--mission map-nav-mission" id="map-nav-mission">Mission</button>
       </div>
       <div class="map-nav-col map-nav-col--right">
         <div class="map-pill map-pill--level">
@@ -73,15 +79,20 @@ export class MapNavBar {
 
     this.livesIconEl = this.root.querySelector('#map-nav-lives-icon')!;
     this.livesTextEl = this.root.querySelector('#map-nav-lives-text')!;
-    this.coinsEl = this.root.querySelector('#map-nav-coins')!;
+    this.coinsEl = this.root.querySelector('.map-nav-coins')!;
     this.levelNumEl = this.root.querySelector('#map-nav-level')!;
     this.rankEl = this.root.querySelector('#map-nav-rank')!;
     this.scoreEl = this.root.querySelector('#map-nav-score')!;
     this.streakEl = this.root.querySelector('#map-nav-streak')!;
 
-    this.root.querySelector('#map-nav-add-lives')!.addEventListener('click', () => this.onAddLives?.());
-    this.root.querySelector('#map-nav-add-coins')!.addEventListener('click', () => this.onAddCoins?.());
-    this.root.querySelector('#map-nav-mission')!.addEventListener('click', () => this.onMission?.());
+    this.root.querySelector('.map-add-btn--lives')!.addEventListener('click', () => this.onAddLives?.());
+    this.root.querySelector('.map-add-btn--coins')!.addEventListener('click', () => this.onAddCoins?.());
+    this.root.querySelector('.map-nav-mission')!.addEventListener('click', () => this.onMission?.());
+
+    if (compact) {
+      this.root.querySelector('.map-nav-mission')?.remove();
+      this.root.querySelectorAll('.map-add-btn').forEach((el) => el.remove());
+    }
   }
 
   setOnAddLives(handler: () => void): void {

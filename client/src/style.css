@@ -512,6 +512,10 @@ textarea {
   min-width: 0;
 }
 
+.map-nav--compact .map-nav-col--left {
+  gap: 8px;
+}
+
 .map-nav-row {
   display: flex;
   align-items: center;
@@ -1764,9 +1768,12 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse 80% 60% at 50% 30%, #2a1654 0%, #0f0824 55%, #08041a 100%);
+  background:
+    radial-gradient(ellipse 90% 55% at 50% 18%, rgba(255, 153, 9, 0.14), transparent 50%),
+    radial-gradient(ellipse 100% 70% at 50% 100%, #031a52 0%, #052265 48%, #031440 100%);
   opacity: 0;
   transition: opacity 0.4s ease;
+  overflow: hidden;
 }
 
 .splash-screen.visible {
@@ -1776,55 +1783,114 @@ textarea {
 .splash-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 42%, rgba(167, 139, 250, 0.18), transparent 55%);
+  background: radial-gradient(circle at 50% 38%, rgba(43, 106, 252, 0.28), transparent 58%);
   pointer-events: none;
+}
+
+.splash-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 12% 78%, rgba(255, 180, 80, 0.12) 0 8px, transparent 9px),
+    radial-gradient(circle at 88% 22%, rgba(91, 154, 255, 0.14) 0 10px, transparent 11px),
+    radial-gradient(circle at 72% 82%, rgba(255, 84, 84, 0.1) 0 6px, transparent 7px),
+    radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.06) 0 5px, transparent 6px);
 }
 
 .splash-content {
   position: relative;
   text-align: center;
   padding: 24px;
+  z-index: 1;
 }
 
 .splash-logo-wrap {
   position: relative;
-  width: 88px;
-  height: 88px;
-  margin: 0 auto 20px;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 22px;
 }
 
-.splash-crystal {
-  position: relative;
-  z-index: 1;
-  width: 36px;
-  height: 36px;
-  animation: crystalPulse 2s ease-in-out infinite;
-}
-
-.splash-orbit {
+.splash-fruit-ring {
   position: absolute;
   inset: 0;
-  border: 2px solid rgba(167, 139, 250, 0.25);
+  animation: splashOrbit 10s linear infinite;
+}
+
+.splash-fruit-orbit-item {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+  transform: rotate(calc(var(--fi) * 60deg)) translateY(-54px);
+}
+
+.splash-fruit-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
-  border-top-color: #a78bfa;
-  animation: splashSpin 1.2s linear infinite;
+  background: radial-gradient(circle at 40% 30%, #5b9aff 0%, #0b45cb 55%, #052265 100%);
+  border: 2px solid rgba(250, 153, 9, 0.65);
+  box-shadow:
+    0 0 0 3px rgba(43, 106, 252, 0.35),
+    0 12px 28px rgba(0, 0, 0, 0.4),
+    inset 0 2px 6px rgba(255, 255, 255, 0.2);
+  animation: splashCorePulse 2s ease-in-out infinite;
+}
+
+.splash-fruit-hero {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25));
+  animation: splashHeroBounce 1.8s ease-in-out infinite;
 }
 
 .splash-title {
-  font-size: clamp(1.8rem, 8vw, 2.4rem);
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 2.75rem);
   font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+}
+
+.splash-title-fruity {
+  display: block;
   color: #fff;
-  text-shadow: 0 0 24px rgba(167, 139, 250, 0.5);
+  text-shadow:
+    0 2px 0 #0b45cb,
+    0 0 28px rgba(98, 183, 255, 0.55);
+}
+
+.splash-title-crush {
+  display: block;
+  background: linear-gradient(180deg, #fff6a8 0%, #ffc900 42%, #fa9909 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(157, 0, 0, 0.45));
 }
 
 .splash-tagline {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  letter-spacing: 0.2em;
+  margin-top: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(232, 230, 255, 0.55);
+  color: rgba(198, 214, 255, 0.72);
 }
 
 .splash-loader {
@@ -1834,32 +1900,46 @@ textarea {
 }
 
 .splash-loader-track {
-  height: 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 8px;
+  border-radius: 8px;
+  background: rgba(0, 20, 80, 0.55);
+  border: 1px solid rgba(98, 183, 255, 0.25);
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .splash-loader-fill {
   height: 100%;
   width: 0;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #8b5cf6, #c4b5fd);
-  box-shadow: 0 0 12px rgba(167, 139, 250, 0.6);
+  border-radius: 8px;
+  background: linear-gradient(90deg, #2b6afc, #5b9aff 45%, #ffc900 100%);
+  box-shadow: 0 0 14px rgba(43, 106, 252, 0.55);
   transition: width 0.1s linear;
 }
 
 .splash-loader-text {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(232, 230, 255, 0.5);
+  color: rgba(198, 214, 255, 0.65);
 }
 
-@keyframes splashSpin {
+@keyframes splashOrbit {
+  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes splashCorePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+@keyframes splashHeroBounce {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-3px) rotate(4deg); }
 }
 
 /* Level map */

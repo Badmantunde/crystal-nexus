@@ -1,13 +1,7 @@
 import { getDifficultyForLevel } from '../player/LevelDifficulty';
 import { LevelProgress, type LevelInfo } from '../player/LevelProgress';
 import { LivesManager } from '../player/Lives';
-import {
-  countTotalStars,
-  getRankFromStars,
-  getProfileScore,
-  getPlayerCoins,
-  getMapStreak,
-} from '../player/PlayerProfile';
+import { buildMapNavState } from '../player/playerNavState';
 import { getThemedLevelTileUrl, getLevelMapSvgPath } from './levelMapAssets';
 import { MapNavBar } from './MapNavBar';
 import { NoLivesModal } from './NoLivesModal';
@@ -109,10 +103,8 @@ export class LevelMap {
   private render(): void {
     const levels = this.progress.getLevelList();
     const unlocked = this.progress.getUnlockedLevel();
-    const totalStars = countTotalStars(this.progress);
-    const rank = getRankFromStars(totalStars).name;
 
-    this.updateNav(unlocked, rank, totalStars);
+    this.updateNav(unlocked);
 
     const stage = this.backdrop.querySelector('.map-stage') as HTMLElement;
     const stageH = TOP_PAD + (levels.length - 1) * ROW_H + NODE_H + BOTTOM_PAD;
@@ -137,16 +129,15 @@ export class LevelMap {
     void this.applyTileArt();
   }
 
-  private updateNav(level: number, rank: string, totalStars: number): void {
-    this.nav.update({
-      level,
-      rank,
-      lives: this.lives.getLives(),
-      livesRegenMs: this.lives.getNextRegenMs(),
-      coins: getPlayerCoins(),
-      score: getProfileScore(this.progress),
-      streak: getMapStreak(totalStars),
-    });
+  private updateNav(level: number): void {
+    this.nav.update(
+      buildMapNavState({
+        level,
+        lives: this.lives.getLives(),
+        livesRegenMs: this.lives.getNextRegenMs(),
+        progress: this.progress,
+      }),
+    );
   }
 
   private async applyTileArt(): Promise<void> {
@@ -270,9 +261,7 @@ export class LevelMap {
       const hadRegen = this.lives.hasPendingRegen();
       if (hadRegen) this.lives.tick();
       if (hadRegen || this.lives.getLives() === 0) {
-        const totalStars = countTotalStars(this.progress);
-        const rank = getRankFromStars(totalStars).name;
-        this.updateNav(this.progress.getUnlockedLevel(), rank, totalStars);
+        this.updateNav(this.progress.getUnlockedLevel());
       }
     }, 1000);
   }

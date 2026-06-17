@@ -31,10 +31,7 @@ import {
   type LevelConfig,
   type StageTheme,
 } from '../player/LevelDifficulty';
-import {
-  countTotalStars,
-  getRankFromStars,
-} from '../player/PlayerProfile';
+import { buildMapNavState } from '../player/playerNavState';
 import {
   buildLevelTarget,
   isLevelTargetComplete,
@@ -151,9 +148,10 @@ export class CanvasGame {
 
     const loop = (t: number) => {
       if (this.visible) {
-        if (this.lives.hasPendingRegen() && t - this.lastLivesTick >= 1000) {
+        const atZeroLives = this.lives.getLives() === 0;
+        if ((this.lives.hasPendingRegen() || atZeroLives) && t - this.lastLivesTick >= 1000) {
           this.lastLivesTick = t;
-          this.lives.tick();
+          if (this.lives.hasPendingRegen()) this.lives.tick();
           this.updateHud();
         }
         this.tick(t);
@@ -210,6 +208,7 @@ export class CanvasGame {
       ms !== null
         ? `No lives! Next life in ${formatRegenCountdown(ms)}`
         : 'No lives left!';
+    this.hud.shakeLives();
     this.hud.showToast(msg, 4000);
   }
 
@@ -667,24 +666,21 @@ export class CanvasGame {
   }
 
   private updateHud(): void {
-    const totalStars = countTotalStars(this.levelProgress);
-    const rank = getRankFromStars(totalStars).name;
-    const score = this.board.getScore();
-
     this.hud.update({
-      score,
+      nav: buildMapNavState({
+        level: this.level,
+        lives: this.lives.getLives(),
+        livesRegenMs: this.lives.getNextRegenMs(),
+        progress: this.levelProgress,
+      }),
+      score: this.board.getScore(),
       moves: this.board.getMoves(),
-      combo: this.board.getCombo(),
       level: this.level,
-      lives: this.lives.getLives(),
       maxLives: MAX_LIVES,
-      livesRegenMs: this.lives.getNextRegenMs(),
-      rank,
       targetTask: this.levelTarget.taskType,
       targetScore: this.levelTarget.scoreTarget,
       objectives: this.levelTarget.collectObjectives,
       collected: this.board.getCollectedCounts(),
-      difficultyLabel: this.stageTheme.label,
       difficultyClass: this.stageTheme.hudClass,
       difficultyTag: getDifficultyTag(this.levelConfig.difficulty),
     });

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w @crystal-nexus/shared && npm run build -w @crystal-nexus/client",
+  "outputDirectory": "client/dist"
+}
