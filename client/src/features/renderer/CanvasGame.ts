@@ -254,13 +254,57 @@ export class CanvasGame {
     this.hud.showToast(msg, 4000);
   }
 
+  private gameLayoutScale(vw: number, vh: number): number {
+    const pad = 12;
+    return Math.min(1, (vw - pad) / 390, (vh - pad) / 820);
+  }
+
+  private bottomChromeReserve(vh: number, scale: number): number {
+    const compact = vh < 720;
+    const base = compact ? 96 : 116;
+    return Math.round(base * scale);
+  }
+
   private resize(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const short = vh < 720;
-    const w = Math.min(vw, vw >= 520 ? 480 : short ? 380 : 400);
-    const h = Math.min(vh, short ? Math.max(w * 1.18, vh * 0.86) : Math.max(w * 1.32, vh * 0.94));
+    const scale = this.visible ? this.gameLayoutScale(vw, vh) : 1;
+    const overlay = document.getElementById('ui-overlay');
+    overlay?.style.setProperty('--game-ui-scale', String(scale));
+    if (overlay) void overlay.offsetHeight;
+
+    const w = Math.min(480, Math.floor(390 * scale), vw - 16);
+
+    let topChrome = Math.round(168 * scale);
+    if (this.visible) {
+      const stats = document.getElementById('hud-board-stats');
+      if (stats) {
+        const statsRect = stats.getBoundingClientRect();
+        if (statsRect.height > 0) topChrome = Math.round(statsRect.bottom + 8);
+      }
+    }
+
+    const bottomReserve = this.bottomChromeReserve(vh, scale);
+    const maxCanvasH = Math.max(220, vh - topChrome - bottomReserve);
+    const h = Math.min(maxCanvasH, Math.round(w * (vh < 720 ? 1.18 : 1.28)));
+
+    const container = document.getElementById('game-container');
+    if (container) {
+      if (this.visible) {
+        container.style.alignItems = 'flex-start';
+        container.style.justifyContent = 'center';
+        container.style.paddingTop = `${Math.max(0, topChrome - 8)}px`;
+        container.style.paddingBottom = `${bottomReserve}px`;
+        container.style.boxSizing = 'border-box';
+      } else {
+        container.style.alignItems = '';
+        container.style.justifyContent = '';
+        container.style.paddingTop = '';
+        container.style.paddingBottom = '';
+        container.style.boxSizing = '';
+      }
+    }
 
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;

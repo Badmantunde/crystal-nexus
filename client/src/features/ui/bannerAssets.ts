@@ -5,5 +5,5 @@ export const RANKING_URL = '/ranking.svg';
 export const BANNER_ASSETS = {
   fire: `${BASE}/vector-16.svg`,
   ranking: RANKING_URL,
-  avatar: `${BASE}/avatar.svg`,
+  avatar: `${BASE}/avatar.png`,
 } as const;

@@ -109,6 +109,22 @@ textarea {
   inset: 0;
   z-index: 10;
   pointer-events: none;
+  --game-ui-scale: 1;
+}
+
+#ui-overlay:not(.hud-hidden) .hud-top {
+  transform: scale(var(--game-ui-scale));
+  transform-origin: top center;
+}
+
+#ui-overlay:not(.hud-hidden) .hud-board-footer {
+  transform: translateX(-50%) scale(var(--game-ui-scale));
+  transform-origin: center top;
+}
+
+#ui-overlay:not(.hud-hidden) .hud-side-toolbar {
+  transform: scale(var(--game-ui-scale));
+  transform-origin: right center;
 }
 
 #ui-overlay.hud-hidden {
@@ -974,6 +990,12 @@ textarea {
   padding: max(8px, env(safe-area-inset-top)) 10px 12px;
 }
 
+.hud-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .player-chip {
   display: flex;
   align-items: center;
@@ -1108,7 +1130,7 @@ textarea {
 
 .hud-diff-pill-text {
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: clamp(0.95rem, 3.8vw, 1.35rem);
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -1778,15 +1800,9 @@ textarea {
 
 .no-lives-icon-wrap {
   margin: 8px auto 4px;
-  width: 72px;
-  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 30%, rgba(255, 84, 84, 0.25), rgba(80, 0, 0, 0.35));
-  border: 1px solid rgba(255, 123, 123, 0.35);
-  box-shadow: 0 0 24px rgba(255, 84, 84, 0.2);
 }
 
 .no-lives-icon {
@@ -1835,8 +1851,13 @@ textarea {
   text-shadow: 0 0 20px rgba(98, 183, 255, 0.45);
 }
 
-.no-lives-card .cn-btn-primary {
-  width: 100%;
+.no-lives-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.no-lives-actions .cn-btn {
+  flex: 1;
 }
 
 .quit-actions {
@@ -2719,8 +2740,7 @@ textarea {
   }
 
   .hud-score-card,
-  .hud-moves-card,
-  .hud-combo-card {
+  .hud-moves-card {
     flex: 1 1 0;
     width: auto;
     min-width: 0;
@@ -2730,23 +2750,13 @@ textarea {
     padding: 5px 6px;
   }
 
-  .hud-combo-card {
-    max-width: 72px;
-  }
-
-  .hud-moves-value,
-  .hud-combo-value {
+  .hud-moves-value {
     font-size: 1.1rem;
   }
 
   .hud-diff-pill-inner {
     padding: 4px 12px;
     min-height: 32px;
-  }
-
-  .hud-diff-pill-text {
-    font-size: clamp(0.8rem, 3.2vw, 1rem);
-    letter-spacing: 0.03em;
   }
 
   .cn-top-banner {
@@ -2766,8 +2776,7 @@ textarea {
   }
 
   .hud-score-card,
-  .hud-moves-card,
-  .hud-combo-card {
+  .hud-moves-card {
     height: 50px;
     min-height: 50px;
   }
@@ -2794,10 +2803,6 @@ textarea {
 .hud-board-footer--compact .hud-diff-pill-inner {
   padding: 3px 10px;
   min-height: 30px;
-}
-
-.hud-board-footer--compact .hud-diff-pill-text {
-  font-size: clamp(0.75rem, 2.8vw, 0.95rem);
 }
 
 .hud-side-toolbar--compact {

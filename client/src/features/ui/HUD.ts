@@ -48,8 +48,6 @@ export class HUD {
   private diffTextEl: HTMLElement;
   private restartBtn: HTMLButtonElement;
   private volumeBtn: HTMLButtonElement;
-  private comboEl: HTMLElement;
-  private comboCardEl: HTMLElement;
   private onRestart: (() => void) | null = null;
   private onQuit: (() => void) | null = null;
   private onSettings: (() => void) | null = null;
@@ -61,6 +59,7 @@ export class HUD {
 
     container.innerHTML = `
       <div class="hud">
+        <div class="hud-top">
         <div id="hud-banner-slot"></div>
         <div class="hud-board-stats">
           <div class="hud-score-card hud-target-card hud-target-card--score" id="hud-target-card">
@@ -89,13 +88,6 @@ export class HUD {
               </div>
             </div>
           </div>
-          <div class="hud-combo-card" id="hud-combo-card">
-            <div class="hud-card-head">
-              <span class="hud-card-icon hud-icon-combo"></span>
-              <span class="hud-card-label">Combo</span>
-            </div>
-            <span class="hud-combo-value" id="hud-combo-val">x0</span>
-          </div>
           <div class="hud-moves-card">
             <div class="hud-card-head">
               <span class="hud-card-icon"></span>
@@ -106,6 +98,7 @@ export class HUD {
               <span class="hud-moves-sub">Moves Left</span>
             </div>
           </div>
+        </div>
         </div>
         <div class="hud-board-footer" id="hud-board-footer">
           <div class="hud-board-footer-row">
@@ -154,8 +147,6 @@ export class HUD {
     this.diffTextEl = container.querySelector('#hud-diff-text')!;
     this.restartBtn = container.querySelector('#hud-restart')!;
     this.volumeBtn = container.querySelector('#hud-volume')!;
-    this.comboEl = container.querySelector('#hud-combo-val')!;
-    this.comboCardEl = container.querySelector('#hud-combo-card')!;
 
     this.restartBtn.addEventListener('click', () => this.onRestart?.());
     container.querySelector('#hud-exit')!.addEventListener('click', () => this.onQuit?.());
@@ -298,11 +289,6 @@ export class HUD {
       this.boardFooterEl.querySelector('#hud-diff-pill')!.className =
         `hud-diff-pill ${state.difficultyClass}`;
     }
-
-    const combo = state.combo ?? 0;
-    this.comboEl.textContent = `x${combo}`;
-    this.comboCardEl.classList.toggle('hud-combo-card--hot', combo >= 3);
-    this.comboCardEl.classList.toggle('hud-combo-card--fire', combo >= 5);
 
     if (state.message) {
       this.messageEl.textContent = state.message;

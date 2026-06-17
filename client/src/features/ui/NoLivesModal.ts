@@ -31,8 +31,10 @@ export class NoLivesModal {
             <span class="no-lives-timer-label">Next life in</span>
             <span class="no-lives-timer" id="no-lives-countdown">5:00</span>
           </div>
-          <button type="button" class="cn-btn cn-btn-ghost" id="no-lives-shop">Open Shop</button>
-          <button type="button" class="cn-btn cn-btn-primary" id="no-lives-close">Got it</button>
+          <div class="no-lives-actions">
+            <button type="button" class="cn-btn cn-btn-ghost" id="no-lives-shop">Open Shop</button>
+            <button type="button" class="cn-btn cn-btn-primary" id="no-lives-close">Got it</button>
+          </div>
         </div>
       </div>
     `;
