@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run build:shared",
-    "build": "tsc && vite build",
+    "build": "node scripts/build.mjs",
     "build:shared": "npm run build -w @crystal-nexus/shared --prefix ..",
     "preview": "vite preview",
     "cap:sync": "cap sync",
@@ -16,7 +15,7 @@
   "dependencies": {
     "@babylonjs/core": "^7.49.0",
     "@babylonjs/loaders": "^7.49.0",
-    "@crystal-nexus/shared": "*"
+    "@crystal-nexus/shared": "file:../packages/shared"
   },
   "devDependencies": {
     "@capacitor/android": "^7.0.0",
