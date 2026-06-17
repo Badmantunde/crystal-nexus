@@ -37,9 +37,11 @@ export class LevelCompleteCard {
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'cn-modal-backdrop complete-backdrop hidden';
     this.backdrop.innerHTML = `
-      <div class="cn-card complete-card" role="dialog" aria-modal="true">
-        <div class="cn-card-shine"></div>
-        <span class="cn-badge" id="lc-badge">LEVEL COMPLETE</span>
+      <div class="cn-card-shell">
+        <div class="cn-card-shell-glow" aria-hidden="true"></div>
+        <div class="cn-card complete-card" role="dialog" aria-modal="true">
+          <div class="cn-card-shine"></div>
+          <span class="cn-badge" id="lc-badge">LEVEL COMPLETE</span>
         <h2 class="complete-title" id="lc-title">Level 1</h2>
         <p class="complete-stars-label">Performance</p>
         <div class="complete-stars" id="lc-stars" aria-label="Stars earned">
@@ -70,6 +72,7 @@ export class LevelCompleteCard {
           <button type="button" class="cn-btn cn-btn-primary" id="lc-next">Next</button>
         </div>
         <button type="button" class="cn-btn cn-btn-map" id="lc-map">World Map</button>
+        </div>
       </div>
     `;
     container.appendChild(this.backdrop);

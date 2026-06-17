@@ -9,12 +9,17 @@ export class QuitConfirmModal {
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'cn-modal-backdrop quit-backdrop hidden';
     this.backdrop.innerHTML = `
-      <div class="cn-card quit-card" role="dialog" aria-modal="true">
-        <h2 class="quit-title">Quit Level?</h2>
-        <p class="quit-body">You will lose <strong>1 life</strong> and return to the map.</p>
-        <div class="quit-actions">
-          <button type="button" class="cn-btn cn-btn-ghost" id="quit-cancel">Keep Playing</button>
-          <button type="button" class="cn-btn cn-btn-danger" id="quit-confirm">Quit</button>
+      <div class="cn-card-shell">
+        <div class="cn-card-shell-glow" aria-hidden="true"></div>
+        <div class="cn-card quit-card" role="dialog" aria-modal="true">
+          <div class="cn-card-shine"></div>
+          <span class="cn-badge cn-badge--warn">LEAVE LEVEL</span>
+          <h2 class="quit-title">Quit Level?</h2>
+          <p class="quit-body">You will lose <strong>1 life</strong> and return to the map.</p>
+          <div class="quit-actions">
+            <button type="button" class="cn-btn cn-btn-ghost" id="quit-cancel">Keep Playing</button>
+            <button type="button" class="cn-btn cn-btn-danger" id="quit-confirm">Quit</button>
+          </div>
         </div>
       </div>
     `;
@@ -30,6 +35,7 @@ export class QuitConfirmModal {
   show(onConfirm: () => void): void {
     this.onConfirm = onConfirm;
     this.backdrop.classList.remove('hidden');
+    void this.backdrop.offsetWidth;
     this.backdrop.classList.add('visible');
   }
 

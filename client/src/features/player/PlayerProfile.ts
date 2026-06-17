@@ -34,6 +34,32 @@ export function getProfileScore(progress: LevelProgress): number {
   return score || progress.getUnlockedLevel() * 100;
 }
 
+const COINS_KEY = 'crystal-nexus-coins';
+const DEFAULT_COINS = 700;
+
+export function getPlayerCoins(): number {
+  const raw = localStorage.getItem(COINS_KEY);
+  if (raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return DEFAULT_COINS;
+}
+
+export function setPlayerCoins(amount: number): void {
+  localStorage.setItem(COINS_KEY, String(Math.max(0, Math.floor(amount))));
+}
+
+export function addPlayerCoins(delta: number): number {
+  const next = getPlayerCoins() + delta;
+  setPlayerCoins(next);
+  return next;
+}
+
+export function getMapStreak(totalStars: number): number {
+  return Math.min(99, Math.max(1, Math.floor(totalStars / 8) + 1));
+}
+
 export function getAvatarInitials(): string {
   const stored = localStorage.getItem('crystal-nexus-player');
   if (stored && stored.length >= 2) return stored.slice(0, 2).toUpperCase();

@@ -16,8 +16,10 @@ export class LevelWelcomeCard {
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'cn-modal-backdrop welcome-backdrop hidden';
     this.backdrop.innerHTML = `
-      <div class="cn-card welcome-card" role="dialog" aria-modal="true">
-        <div class="cn-card-shine"></div>
+      <div class="cn-card-shell">
+        <div class="cn-card-shell-glow" aria-hidden="true"></div>
+        <div class="cn-card welcome-card" role="dialog" aria-modal="true">
+          <div class="cn-card-shine"></div>
         <div class="welcome-brand">
           <span class="icon-crystal welcome-crystal" aria-hidden="true"></span>
           <span class="welcome-brand-text">Crystal Nexus</span>
@@ -44,6 +46,7 @@ export class LevelWelcomeCard {
           <span class="icon-crystal wc wc-3"></span>
         </div>
         <button type="button" class="cn-btn cn-btn-primary welcome-play" id="lw-play">Play</button>
+        </div>
       </div>
     `;
     container.appendChild(this.backdrop);

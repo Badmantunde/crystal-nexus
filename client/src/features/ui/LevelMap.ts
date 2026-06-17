@@ -1,13 +1,16 @@
 import { getDifficultyForLevel } from '../player/LevelDifficulty';
 import { LevelProgress, type LevelInfo } from '../player/LevelProgress';
-import { LivesManager, formatRegenCountdown } from '../player/Lives';
+import { LivesManager } from '../player/Lives';
 import {
   countTotalStars,
   getRankFromStars,
   getProfileScore,
+  getPlayerCoins,
+  getMapStreak,
 } from '../player/PlayerProfile';
 import { getThemedLevelTileUrl, getLevelMapSvgPath } from './levelMapAssets';
-import { TopBanner } from './TopBanner';
+import { MapNavBar } from './MapNavBar';
+import { NoLivesModal } from './NoLivesModal';
 import { starRowHtml } from './UiChrome';
 
 const MAP_W = 340;
@@ -23,7 +26,8 @@ export class LevelMap {
   private scrollEl: HTMLElement;
   private listEl: HTMLElement;
   private trailEl: HTMLElement;
-  private banner: TopBanner;
+  private nav: MapNavBar;
+  private noLivesModal: NoLivesModal;
   private progress: LevelProgress;
   private lives: LivesManager;
   private onSelect: ((level: number) => void) | null = null;
@@ -35,12 +39,12 @@ export class LevelMap {
 
     this.progress = new LevelProgress();
     this.lives = new LivesManager();
+    this.noLivesModal = new NoLivesModal(containerId, this.lives);
 
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'level-map hidden';
     this.backdrop.innerHTML = `
-      <div class="level-map-top" id="map-banner-slot"></div>
-      <p class="map-no-lives-tip" aria-live="polite"></p>
+      <div class="level-map-top" id="map-nav-slot"></div>
       <div class="level-map-scroll">
         <div class="map-summit-label">Summit</div>
         <div class="map-stage">
@@ -55,7 +59,11 @@ export class LevelMap {
     this.scrollEl = this.backdrop.querySelector('.level-map-scroll')!;
     this.listEl = this.backdrop.querySelector('#map-levels')!;
     this.trailEl = this.backdrop.querySelector('#map-trail')!;
-    this.banner = new TopBanner(this.backdrop.querySelector('#map-banner-slot')!);
+    this.nav = new MapNavBar(this.backdrop.querySelector('#map-nav-slot')!);
+
+    this.nav.setOnAddLives(() => this.showShopToast('Lives shop coming soon'));
+    this.nav.setOnAddCoins(() => this.showShopToast('Coin shop coming soon'));
+    this.nav.setOnMission(() => this.showShopToast('Missions coming soon'));
   }
 
   show(onSelect: (level: number) => void): void {
@@ -70,12 +78,21 @@ export class LevelMap {
 
   hide(): void {
     this.stopRegenTick();
+    this.noLivesModal.hide();
     this.backdrop.classList.remove('visible');
     setTimeout(() => this.backdrop.classList.add('hidden'), 280);
   }
 
   refresh(): void {
     if (!this.backdrop.classList.contains('hidden')) this.render();
+  }
+
+  private showShopToast(message: string): void {
+    const tip = document.createElement('p');
+    tip.className = 'map-shop-toast visible';
+    tip.textContent = message;
+    this.backdrop.appendChild(tip);
+    setTimeout(() => tip.remove(), 2400);
   }
 
   private scrollToCurrent(): void {
@@ -95,14 +112,7 @@ export class LevelMap {
     const totalStars = countTotalStars(this.progress);
     const rank = getRankFromStars(totalStars).name;
 
-    this.banner.update({
-      level: unlocked,
-      rank,
-      lives: this.lives.getLives(),
-      livesRegenMs: this.lives.getNextRegenMs(),
-      combo: 1,
-      score: getProfileScore(this.progress),
-    });
+    this.updateNav(unlocked, rank, totalStars);
 
     const stage = this.backdrop.querySelector('.map-stage') as HTMLElement;
     const stageH = TOP_PAD + (levels.length - 1) * ROW_H + NODE_H + BOTTOM_PAD;
@@ -114,15 +124,29 @@ export class LevelMap {
     this.listEl.querySelectorAll('.map-node.playable').forEach((node) => {
       node.addEventListener('click', () => {
         const level = Number((node as HTMLElement).dataset.level);
-        if (level && this.lives.canPlay()) {
+        if (!level) return;
+        if (this.lives.canPlay()) {
           this.onSelect?.(level);
-        } else if (!this.lives.canPlay()) {
-          this.flashNoLives();
+        } else {
+          this.nav.shakeLives();
+          this.noLivesModal.show();
         }
       });
     });
 
     void this.applyTileArt();
+  }
+
+  private updateNav(level: number, rank: string, totalStars: number): void {
+    this.nav.update({
+      level,
+      rank,
+      lives: this.lives.getLives(),
+      livesRegenMs: this.lives.getNextRegenMs(),
+      coins: getPlayerCoins(),
+      score: getProfileScore(this.progress),
+      streak: getMapStreak(totalStars),
+    });
   }
 
   private async applyTileArt(): Promise<void> {
@@ -240,26 +264,15 @@ export class LevelMap {
     `;
   }
 
-  private updateBannerLives(): void {
-    const totalStars = countTotalStars(this.progress);
-    const rank = getRankFromStars(totalStars).name;
-    this.banner.update({
-      level: this.progress.getUnlockedLevel(),
-      rank,
-      lives: this.lives.getLives(),
-      livesRegenMs: this.lives.getNextRegenMs(),
-      combo: 1,
-      score: getProfileScore(this.progress),
-    });
-  }
-
   private startRegenTick(): void {
     this.stopRegenTick();
     this.regenTimer = setInterval(() => {
       const hadRegen = this.lives.hasPendingRegen();
       if (hadRegen) this.lives.tick();
       if (hadRegen || this.lives.getLives() === 0) {
-        this.updateBannerLives();
+        const totalStars = countTotalStars(this.progress);
+        const rank = getRankFromStars(totalStars).name;
+        this.updateNav(this.progress.getUnlockedLevel(), rank, totalStars);
       }
     }, 1000);
   }
@@ -268,19 +281,6 @@ export class LevelMap {
     if (this.regenTimer !== null) {
       clearInterval(this.regenTimer);
       this.regenTimer = null;
-    }
-  }
-
-  private flashNoLives(): void {
-    this.banner.shakeLives();
-    const ms = this.lives.getNextRegenMs();
-    if (ms !== null) {
-      const tip = this.backdrop.querySelector('.map-no-lives-tip') as HTMLElement | null;
-      if (tip) {
-        tip.textContent = `Next life in ${formatRegenCountdown(ms)}`;
-        tip.classList.add('visible');
-        setTimeout(() => tip.classList.remove('visible'), 3200);
-      }
     }
   }
 }
