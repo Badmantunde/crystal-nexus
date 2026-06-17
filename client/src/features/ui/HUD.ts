@@ -1,4 +1,5 @@
-import { MapNavBar, type MapNavState } from './MapNavBar';
+import { TopBanner } from './TopBanner';
+import type { MapNavState } from './MapNavBar';
 import type { LevelObjective, TargetTaskType } from '../player/LevelObjectives';
 import { getObjectiveRemainingCount } from '../player/LevelObjectives';
 import type { FruitKind } from '../candy/fruitAssets';
@@ -29,7 +30,7 @@ export interface HUDState {
 
 export class HUD {
   private hudRoot: HTMLElement;
-  private nav: MapNavBar;
+  private banner: TopBanner;
   private targetCardEl: HTMLElement;
   private targetScoreValEl: HTMLElement;
   private targetProgressFillEl: HTMLElement;
@@ -120,7 +121,9 @@ export class HUD {
     `;
 
     this.hudRoot = container.querySelector('.hud')!;
-    this.nav = new MapNavBar(container.querySelector('#hud-banner-slot')!, { compact: true });
+    this.banner = new TopBanner(container.querySelector('#hud-banner-slot')!, {
+      showQuit: false,
+    });
     this.targetCardEl = container.querySelector('#hud-target-card')!;
     this.targetScoreValEl = container.querySelector('#hud-target-score-val')!;
     this.targetProgressFillEl = container.querySelector('#hud-target-progress-fill')!;
@@ -186,7 +189,7 @@ export class HUD {
   }
 
   update(state: HUDState): void {
-    this.nav.update(state.nav);
+    this.banner.updateNav(state.nav);
 
     this.movesEl.textContent = String(state.moves);
 
@@ -232,7 +235,7 @@ export class HUD {
   }
 
   shakeLives(): void {
-    this.nav.shakeLives();
+    this.banner.shakeLives();
   }
 
   showToast(text: string, durationMs = 2000): void {

@@ -22,6 +22,10 @@ export function getRankFromStars(totalStars: number): PlayerRank {
   return { name: 'Rookie', tier: 1 };
 }
 
+const PROFILE_SCORE_BASE = 174;
+/** Calibrates legacy display (~1,199) to target ranking score. */
+const PROFILE_SCORE_CALIBRATION = 174 / 1199;
+
 export function getProfileScore(progress: LevelProgress): number {
   let score = 0;
   for (let i = 1; i <= progress.getTotalLevels(); i++) {
@@ -31,7 +35,9 @@ export function getProfileScore(progress: LevelProgress): number {
       score += Math.round(cfg.targetScore * (0.5 + stars * 0.25));
     }
   }
-  return score || progress.getUnlockedLevel() * 100;
+  if (score === 0) return PROFILE_SCORE_BASE;
+  const legacyDisplay = Math.round(score / 10);
+  return Math.max(1, Math.round(legacyDisplay * PROFILE_SCORE_CALIBRATION));
 }
 
 const COINS_KEY = 'crystal-nexus-coins';

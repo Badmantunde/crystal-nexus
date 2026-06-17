@@ -1,14 +1,15 @@
-import { formatRegenCountdown } from '../player/Lives';
-import { LIVE_LOST_URL, LIVE_URL } from './UiChrome';
+import { MAX_LIVES, formatRegenCountdown } from '../player/Lives';
 import { BANNER_ASSETS } from './bannerAssets';
+import { MAP_NAV } from './mapNavAssets';
+import type { MapNavState } from './MapNavBar';
 
 export interface TopBannerState {
   level: number;
   rank: string;
   lives: number;
   livesRegenMs?: number | null;
-  combo?: number;
   score: number;
+  streak?: number;
   avatarUrl?: string;
 }
 
@@ -24,7 +25,7 @@ export class TopBanner {
   private livesValEl: HTMLElement;
   private levelEl: HTMLElement;
   private rankEl: HTMLElement;
-  private comboEl: HTMLElement;
+  private streakEl: HTMLElement;
   private scoreEl: HTMLElement;
   private avatarImgEl: HTMLImageElement;
   private onQuit: (() => void) | null = null;
@@ -53,11 +54,13 @@ export class TopBanner {
 
         <div class="cn-banner-row">
           <div class="cn-banner-side cn-banner-side--left">
+          <div class="cn-banner-lives">
             <div class="cn-banner-heart-wrap" id="cn-banner-lives">
-              <img class="cn-banner-heart" src="${LIVE_URL}" width="32" height="32" alt="" />
-              <span class="cn-banner-lives-val" id="cn-banner-lives-val">5</span>
+              <img class="cn-banner-heart" src="${MAP_NAV.live}" width="32" height="32" alt="" />
             </div>
-            <div class="cn-banner-level-block${showLevel ? '' : ' cn-banner-level-block--rank-only'}">
+            <span class="cn-banner-lives-text" id="cn-banner-lives-val">FULL</span>
+          </div>
+          <div class="cn-banner-level-block${showLevel ? '' : ' cn-banner-level-block--rank-only'}">
               <p class="cn-banner-lv" id="cn-banner-lv"${showLevel ? '' : ' hidden'}>LV 1</p>
               <p class="cn-banner-rank" id="cn-banner-rank">ROOKIE</p>
             </div>
@@ -70,7 +73,7 @@ export class TopBanner {
             </div>
             <div class="cn-banner-score">
               <img class="cn-banner-ranking" src="${a.ranking}" width="18" height="18" alt="" />
-              <span class="cn-banner-score-val" id="cn-banner-score">123</span>
+              <span class="cn-banner-score-val" id="cn-banner-score">174</span>
             </div>
           </div>
         </div>
@@ -90,7 +93,7 @@ export class TopBanner {
     this.livesValEl = this.root.querySelector('#cn-banner-lives-val')!;
     this.levelEl = this.root.querySelector('#cn-banner-lv')!;
     this.rankEl = this.root.querySelector('#cn-banner-rank')!;
-    this.comboEl = this.root.querySelector('#cn-banner-streak')!;
+    this.streakEl = this.root.querySelector('#cn-banner-streak')!;
     this.scoreEl = this.root.querySelector('#cn-banner-score')!;
     this.avatarImgEl = this.root.querySelector('.cn-banner-avatar-img')!;
 
@@ -112,32 +115,48 @@ export class TopBanner {
   }
 
   update(state: TopBannerState): void {
-    const empty = state.lives === 0;
-    this.livesIconEl.src = empty ? LIVE_LOST_URL : LIVE_URL;
+    this.applyNavState(state);
+  }
+
+  updateNav(state: MapNavState): void {
+    this.applyNavState(state);
+  }
+
+  private applyNavState(state: TopBannerState | MapNavState): void {
+    const empty = state.lives <= 0;
+    const full = state.lives >= MAX_LIVES;
+
+    this.livesIconEl.src = empty ? MAP_NAV.liveLost : MAP_NAV.live;
     this.livesWrapEl.classList.toggle('cn-banner-heart-wrap--lost', empty);
 
-    if (empty && state.livesRegenMs != null) {
-      this.livesValEl.textContent = formatRegenCountdown(state.livesRegenMs);
-      this.livesValEl.classList.add('cn-banner-lives-val--timer');
+    if (empty) {
+      const cd = state.livesRegenMs != null ? formatRegenCountdown(state.livesRegenMs) : '--:--';
+      this.livesValEl.textContent = cd;
+      this.livesValEl.classList.add('cn-banner-lives-text--timer');
+    } else if (full) {
+      this.livesValEl.textContent = 'FULL';
+      this.livesValEl.classList.remove('cn-banner-lives-text--timer');
     } else {
-      this.livesValEl.textContent = String(state.lives);
-      this.livesValEl.classList.remove('cn-banner-lives-val--timer');
+      this.livesValEl.textContent = `x${state.lives}`;
+      this.livesValEl.classList.remove('cn-banner-lives-text--timer');
     }
 
     this.levelEl.textContent = `LV ${state.level}`;
     this.rankEl.textContent = state.rank.toUpperCase();
-    this.comboEl.textContent = `x${Math.max(1, state.combo ?? 1)}`;
+    this.streakEl.textContent = `x${state.streak ?? 1}`;
     this.scoreEl.textContent = state.score.toLocaleString();
 
-    if (state.avatarUrl) {
+    if ('avatarUrl' in state && state.avatarUrl) {
       this.avatarImgEl.src = state.avatarUrl;
     }
 
     this.livesWrapEl.setAttribute(
       'aria-label',
-      empty && state.livesRegenMs
+      empty && state.livesRegenMs != null
         ? `No lives. Next in ${formatRegenCountdown(state.livesRegenMs)}`
-        : `${state.lives} lives`,
+        : full
+          ? 'Lives full'
+          : `${state.lives} lives`,
     );
   }
 

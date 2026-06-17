@@ -272,6 +272,31 @@ textarea {
   padding-right: 4px;
 }
 
+.cn-banner-lives {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.cn-banner-lives-text {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #fff;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.cn-banner-lives-text--timer {
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fecaca;
+}
+
 .cn-banner-side--right {
   grid-column: 3;
   justify-content: flex-end;
@@ -323,30 +348,6 @@ textarea {
   opacity: 0.9;
 }
 
-.cn-banner-lives-val {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  color: #fff;
-  line-height: 1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.cn-banner-lives-val--timer {
-  font-size: 6px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #fecaca;
-  top: 52%;
-}
-
 .cn-banner-level-block {
   display: flex;
   flex-direction: column;
@@ -358,7 +359,7 @@ textarea {
 .cn-banner-lv {
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.26px;
   line-height: 1;
@@ -377,7 +378,7 @@ textarea {
 .cn-banner-rank {
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.26px;
   line-height: 1;
