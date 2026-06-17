@@ -1,5 +1,5 @@
 import { CrystalCategory } from '@crystal-nexus/shared';
-import type { Difficulty } from './LevelDifficulty';
+import type { LevelTier } from './LevelDifficulty';
 
 export type FruitId = 'orange' | 'apple' | 'pear';
 export type TargetTaskType = 'score' | 'collect';
@@ -22,31 +22,31 @@ const FRUIT_OBJECTIVES: { fruit: FruitId; category: CrystalCategory }[] = [
   { fruit: 'pear', category: CrystalCategory.Nature },
 ];
 
-/** Easy & boss levels use score target; harder stages use fruit collection. */
-export function taskTypeForDifficulty(difficulty: Difficulty): TargetTaskType {
-  if (difficulty === 'hard') return 'collect';
+export function taskTypeForTier(tier: LevelTier): TargetTaskType {
+  if (tier === 'normal' || tier === 'hard') return 'collect';
   return 'score';
 }
 
-function collectTargetForDifficulty(difficulty: Difficulty): number {
-  if (difficulty === 'hard') return 80;
-  return 120;
+function collectTargetForTier(tier: LevelTier): number {
+  if (tier === 'hard') return 40;
+  if (tier === 'normal') return 30;
+  return 50;
 }
 
-function buildCollectObjectives(difficulty: Difficulty): LevelObjective[] {
-  const target = collectTargetForDifficulty(difficulty);
+function buildCollectObjectives(tier: LevelTier): LevelObjective[] {
+  const target = collectTargetForTier(tier);
   return FRUIT_OBJECTIVES.map((item) => ({ ...item, target }));
 }
 
 export function buildLevelTarget(
   _level: number,
-  difficulty: Difficulty,
+  tier: LevelTier,
   scoreTarget: number,
 ): LevelTarget {
   return {
-    taskType: taskTypeForDifficulty(difficulty),
+    taskType: taskTypeForTier(tier),
     scoreTarget,
-    collectObjectives: buildCollectObjectives(difficulty),
+    collectObjectives: buildCollectObjectives(tier),
   };
 }
 

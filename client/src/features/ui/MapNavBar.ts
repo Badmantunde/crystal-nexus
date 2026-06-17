@@ -12,7 +12,7 @@ export interface MapNavState {
 }
 
 export interface MapNavBarOptions {
-  /** Hide Mission pill (in-game HUD). */
+  /** Hide Day Challenge pill (in-game HUD). */
   compact?: boolean;
 }
 
@@ -27,7 +27,7 @@ export class MapNavBar {
   private streakEl: HTMLElement;
   private onAddLives: (() => void) | null = null;
   private onAddCoins: (() => void) | null = null;
-  private onMission: (() => void) | null = null;
+  private onDayChallenge: (() => void) | null = null;
 
   constructor(parent: HTMLElement, options: MapNavBarOptions = {}) {
     const compact = options.compact ?? false;
@@ -55,7 +55,7 @@ export class MapNavBar {
             <img src="${a.add}" width="18" height="18" alt="" />
           </button>
         </div>
-        <button type="button" class="map-pill map-pill--solo map-pill--mission map-nav-mission" id="map-nav-mission">Mission</button>
+        <button type="button" class="map-pill map-pill--solo map-pill--day map-nav-day" id="map-nav-day">Day Challenge</button>
       </div>
       <div class="map-nav-col map-nav-col--right">
         <div class="map-pill map-pill--level">
@@ -87,10 +87,10 @@ export class MapNavBar {
 
     this.root.querySelector('.map-add-btn--lives')!.addEventListener('click', () => this.onAddLives?.());
     this.root.querySelector('.map-add-btn--coins')!.addEventListener('click', () => this.onAddCoins?.());
-    this.root.querySelector('.map-nav-mission')!.addEventListener('click', () => this.onMission?.());
+    this.root.querySelector('.map-nav-day')!.addEventListener('click', () => this.onDayChallenge?.());
 
     if (compact) {
-      this.root.querySelector('.map-nav-mission')?.remove();
+      this.root.querySelector('.map-nav-day')?.remove();
       this.root.querySelectorAll('.map-add-btn').forEach((el) => el.remove());
     }
   }
@@ -103,8 +103,8 @@ export class MapNavBar {
     this.onAddCoins = handler;
   }
 
-  setOnMission(handler: () => void): void {
-    this.onMission = handler;
+  setOnDayChallenge(handler: () => void): void {
+    this.onDayChallenge = handler;
   }
 
   update(state: MapNavState): void {

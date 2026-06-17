@@ -567,10 +567,12 @@ textarea {
   color: #fff;
 }
 
+.map-pill--day,
 .map-pill--mission {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(255, 201, 0, 0.35) 0%, rgba(250, 153, 9, 0.2) 100%);
 }
 
 .map-pill--empty {
@@ -649,21 +651,166 @@ textarea {
 }
 
 .map-shop-toast {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  top: 72px;
+  bottom: max(24px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  z-index: 12;
-  padding: 8px 14px;
-  border-radius: 500px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  background: radial-gradient(circle at center, #0b45cb, #052265);
-  border: 1px solid rgba(43, 106, 252, 0.5);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(5, 34, 101, 0.92);
+  border: 1px solid rgba(98, 183, 255, 0.35);
+  color: #e8f0ff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  z-index: 120;
   pointer-events: none;
-  animation: mapToastFade 2.4s ease forwards;
+}
+
+.map-chapter-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 12px 6px;
+  margin: 4px 0 2px;
+  text-align: center;
+}
+
+.map-chapter-kicker {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(198, 214, 255, 0.55);
+}
+
+.map-chapter-name {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.map-chapter-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(198, 214, 255, 0.7);
+}
+
+.shop-card,
+.day-challenge-card {
+  max-width: 320px;
+  text-align: center;
+}
+
+.shop-title,
+.day-challenge-title {
+  margin: 8px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.shop-balance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffe8a8;
+}
+
+.shop-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.shop-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(98, 183, 255, 0.35);
+  background: rgba(0, 37, 124, 0.55);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shop-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.shop-item-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.shop-item-price {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffe8a8;
+}
+
+.shop-hint {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  color: rgba(198, 214, 255, 0.65);
+  line-height: 1.4;
+}
+
+.shop-message {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #a7f3d0;
+}
+
+.cn-badge--day {
+  background: linear-gradient(90deg, #ffc900, #fa9909);
+  color: #3b2200;
+}
+
+.day-challenge-body {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(232, 240, 255, 0.85);
+}
+
+.day-challenge-perks {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  font-size: 0.78rem;
+  color: rgba(198, 214, 255, 0.85);
+}
+
+.day-challenge-perks li {
+  padding: 4px 0 4px 18px;
+  position: relative;
+}
+
+.day-challenge-perks li::before {
+  content: '✦';
+  position: absolute;
+  left: 0;
+  color: #ffc900;
+}
+
+.cn-stat-pill--coins .cn-stat-pill-value {
+  color: #ffe8a8;
 }
 
 @keyframes mapToastFade {

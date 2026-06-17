@@ -8,6 +8,7 @@ export interface LevelStats {
   maxCombo: number;
   stars: 1 | 2 | 3;
   won: boolean;
+  coinsEarned?: number;
 }
 
 export interface LevelCompleteActions {
@@ -18,7 +19,7 @@ export interface LevelCompleteActions {
 }
 
 export function calcStars(score: number, target: number, movesLeft: number): 1 | 2 | 3 {
-  if (score >= target * 1.5 && movesLeft >= 8) return 3;
+  if (score >= target * 1.3 && movesLeft >= 8) return 3;
   if (score >= target * 1.15 || movesLeft >= 5) return 2;
   return 1;
 }
@@ -66,6 +67,10 @@ export class LevelCompleteCard {
             <span class="cn-stat-pill-label">Best Combo</span>
             <span class="cn-stat-pill-value" id="lc-combo">×0</span>
           </div>
+          <div class="cn-stat-pill cn-stat-pill--coins" id="lc-coins-wrap" hidden>
+            <span class="cn-stat-pill-label">Coins</span>
+            <span class="cn-stat-pill-value" id="lc-coins">+0</span>
+          </div>
         </div>
         <div class="complete-actions">
           <button type="button" class="cn-btn cn-btn-ghost" id="lc-replay">Replay</button>
@@ -109,6 +114,15 @@ export class LevelCompleteCard {
     this.backdrop.querySelector('#lc-target')!.textContent = stats.targetScore.toLocaleString();
     this.backdrop.querySelector('#lc-moves')!.textContent = String(stats.movesLeft);
     this.backdrop.querySelector('#lc-combo')!.textContent = `×${stats.maxCombo}`;
+
+    const coinsWrap = this.backdrop.querySelector('#lc-coins-wrap') as HTMLElement;
+    const coinsEl = this.backdrop.querySelector('#lc-coins')!;
+    if (won && stats.coinsEarned && stats.coinsEarned > 0) {
+      coinsWrap.hidden = false;
+      coinsEl.textContent = `+${stats.coinsEarned}`;
+    } else {
+      coinsWrap.hidden = true;
+    }
 
     const stars = this.backdrop.querySelectorAll<HTMLImageElement>('.star-icon');
     stars.forEach((el) => {

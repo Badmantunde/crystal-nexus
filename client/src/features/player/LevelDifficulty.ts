@@ -1,7 +1,11 @@
 export type Difficulty = 'easy' | 'hard' | 'monster';
 
+/** Pacing tier — mapped to board themes via `tierToDifficulty`. */
+export type LevelTier = 'tutorial' | 'relaxed' | 'normal' | 'hard' | 'beast';
+
 export interface LevelConfig {
   level: number;
+  tier: LevelTier;
   difficulty: Difficulty;
   targetScore: number;
   moves: number;
@@ -20,18 +24,20 @@ export interface StageTheme {
   label: string;
 }
 
-const EASY_COUNT = 3;
-
-const TARGET_MULT: Record<Difficulty, number> = {
-  easy: 1,
-  hard: 1.22,
-  monster: 1.75,
+const MOVE_LIMIT: Record<LevelTier, number> = {
+  tutorial: 35,
+  relaxed: 32,
+  normal: 28,
+  hard: 24,
+  beast: 22,
 };
 
-const MOVE_LIMIT: Record<Difficulty, number> = {
-  easy: 30,
-  hard: 26,
-  monster: 18,
+const TARGET_MULT: Record<LevelTier, number> = {
+  tutorial: 0.6,
+  relaxed: 0.85,
+  normal: 1,
+  hard: 1.15,
+  beast: 1.35,
 };
 
 export const STAGE_THEMES: Record<Difficulty, StageTheme> = {
@@ -73,27 +79,45 @@ export const STAGE_THEMES: Record<Difficulty, StageTheme> = {
   },
 };
 
-/** Stable per-level roll so the map never reshuffles. */
-export function getDifficultyForLevel(level: number): Difficulty {
-  if (level <= EASY_COUNT) return 'easy';
-  if (level === 8) return 'monster';
-  if (level % 15 === 0) return 'monster';
-  if (level % 9 === 0) return 'hard';
+/**
+ * Curriculum pacing — no random beast rolls.
+ * Positions 1–6 within each chapter: teach → boss (5) → breather (6).
+ */
+export function getTierForLevel(level: number): LevelTier {
+  const pos = ((level - 1) % 6) + 1;
 
-  const roll = ((level * 1103515245 + 12345) >>> 0) % 100;
-  if (roll < 12) return 'monster';
-  if (roll < 42) return 'hard';
+  if (level <= 4) return 'tutorial';
+  if (pos === 5) return 'beast';
+  if (pos === 6) return 'relaxed';
+
+  if (level <= 12) return 'relaxed';
+  if (level <= 24) return 'normal';
+  return 'hard';
+}
+
+export function tierToDifficulty(tier: LevelTier): Difficulty {
+  if (tier === 'beast') return 'monster';
+  if (tier === 'normal' || tier === 'hard') return 'hard';
   return 'easy';
 }
 
+/** @deprecated Use getTierForLevel — kept for map node CSS classes. */
+export function getDifficultyForLevel(level: number): Difficulty {
+  return tierToDifficulty(getTierForLevel(level));
+}
+
 export function buildLevelConfig(level: number): LevelConfig {
-  const difficulty = getDifficultyForLevel(level);
-  const baseTarget = 1000 + (level - 1) * 200;
+  const tier = getTierForLevel(level);
+  const difficulty = tierToDifficulty(tier);
+  const chapter = Math.ceil(level / 6);
+  const baseTarget = 400 + (level - 1) * 80 + chapter * 100;
+
   return {
     level,
+    tier,
     difficulty,
-    targetScore: Math.round(baseTarget * TARGET_MULT[difficulty]),
-    moves: MOVE_LIMIT[difficulty],
+    targetScore: Math.round(baseTarget * TARGET_MULT[tier]),
+    moves: MOVE_LIMIT[tier],
   };
 }
 
@@ -200,13 +224,17 @@ export function clearDifficultyThemeClass(): void {
   }
 }
 
-export function getDifficultyTag(difficulty: Difficulty): string {
-  switch (difficulty) {
-    case 'easy':
+export function getDifficultyTag(tier: LevelTier): string {
+  switch (tier) {
+    case 'tutorial':
+      return 'JUICY';
+    case 'relaxed':
       return 'EASY';
+    case 'normal':
+      return 'NORMAL';
     case 'hard':
       return 'HARD';
-    case 'monster':
+    case 'beast':
       return 'BEAST';
   }
 }

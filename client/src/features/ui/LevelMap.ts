@@ -1,16 +1,20 @@
 import { getDifficultyForLevel } from '../player/LevelDifficulty';
+import { getChapterForLevel, isChapterStart } from '../player/Chapters';
 import { LevelProgress, type LevelInfo } from '../player/LevelProgress';
 import { LivesManager } from '../player/Lives';
 import { buildMapNavState } from '../player/playerNavState';
 import { getThemedLevelTileUrl, getLevelMapSvgPath } from './levelMapAssets';
 import { MapNavBar } from './MapNavBar';
 import { NoLivesModal } from './NoLivesModal';
+import { ShopModal } from './ShopModal';
+import { DayChallengeModal } from './DayChallengeModal';
 import { starRowHtml } from './UiChrome';
 
 const MAP_W = 340;
 const NODE_W = 97;
 const NODE_H = 84;
 const ROW_H = 112;
+const CHAPTER_ROW_H = 52;
 const NODE_HALF = NODE_W / 2;
 const TOP_PAD = 40;
 const BOTTOM_PAD = 64;
@@ -22,6 +26,8 @@ export class LevelMap {
   private trailEl: HTMLElement;
   private nav: MapNavBar;
   private noLivesModal: NoLivesModal;
+  private shopModal: ShopModal;
+  private dayChallengeModal: DayChallengeModal;
   private progress: LevelProgress;
   private lives: LivesManager;
   private onSelect: ((level: number) => void) | null = null;
@@ -34,6 +40,8 @@ export class LevelMap {
     this.progress = new LevelProgress();
     this.lives = new LivesManager();
     this.noLivesModal = new NoLivesModal(containerId, this.lives);
+    this.shopModal = new ShopModal(containerId, this.lives);
+    this.dayChallengeModal = new DayChallengeModal(containerId);
 
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'level-map hidden';
@@ -45,7 +53,7 @@ export class LevelMap {
           <svg class="map-trail-svg" id="map-trail" aria-hidden="true"></svg>
           <div class="level-map-path" id="map-levels"></div>
         </div>
-        <div class="map-start-label">Start — Level 1</div>
+        <div class="map-start-label">Start — Sunny Grove</div>
       </div>
     `;
     container.appendChild(this.backdrop);
@@ -55,9 +63,11 @@ export class LevelMap {
     this.trailEl = this.backdrop.querySelector('#map-trail')!;
     this.nav = new MapNavBar(this.backdrop.querySelector('#map-nav-slot')!);
 
-    this.nav.setOnAddLives(() => this.showShopToast('Lives shop coming soon'));
-    this.nav.setOnAddCoins(() => this.showShopToast('Coin shop coming soon'));
-    this.nav.setOnMission(() => this.showShopToast('Missions coming soon'));
+    this.nav.setOnAddLives(() => this.shopModal.show('lives'));
+    this.nav.setOnAddCoins(() => this.shopModal.show('coins'));
+    this.nav.setOnDayChallenge(() => this.dayChallengeModal.show());
+    this.shopModal.setOnChange(() => this.updateNav(this.progress.getUnlockedLevel()));
+    this.noLivesModal.setOnShop(() => this.shopModal.show('lives'));
   }
 
   show(onSelect: (level: number) => void): void {
@@ -73,20 +83,14 @@ export class LevelMap {
   hide(): void {
     this.stopRegenTick();
     this.noLivesModal.hide();
+    this.shopModal.hide();
+    this.dayChallengeModal.hide();
     this.backdrop.classList.remove('visible');
     setTimeout(() => this.backdrop.classList.add('hidden'), 280);
   }
 
   refresh(): void {
     if (!this.backdrop.classList.contains('hidden')) this.render();
-  }
-
-  private showShopToast(message: string): void {
-    const tip = document.createElement('p');
-    tip.className = 'map-shop-toast visible';
-    tip.textContent = message;
-    this.backdrop.appendChild(tip);
-    setTimeout(() => tip.remove(), 2400);
   }
 
   private scrollToCurrent(): void {
@@ -106,11 +110,26 @@ export class LevelMap {
 
     this.updateNav(unlocked);
 
+    const chapterRows = levels.filter((l) => isChapterStart(l.level)).length;
+    const stageH =
+      TOP_PAD +
+      (levels.length - 1) * ROW_H +
+      chapterRows * CHAPTER_ROW_H +
+      NODE_H +
+      BOTTOM_PAD;
+
     const stage = this.backdrop.querySelector('.map-stage') as HTMLElement;
-    const stageH = TOP_PAD + (levels.length - 1) * ROW_H + NODE_H + BOTTOM_PAD;
     stage.style.minHeight = `${stageH}px`;
 
-    this.listEl.innerHTML = levels.map((info, i) => this.renderNode(info, i)).join('');
+    this.listEl.innerHTML = levels
+      .map((info, i) => {
+        const chapterHeader = isChapterStart(info.level)
+          ? this.renderChapterHeader(info.level)
+          : '';
+        return chapterHeader + this.renderNode(info, i);
+      })
+      .join('');
+
     this.drawTrail(levels.length, unlocked);
 
     this.listEl.querySelectorAll('.map-node.playable').forEach((node) => {
@@ -127,6 +146,17 @@ export class LevelMap {
     });
 
     void this.applyTileArt();
+  }
+
+  private renderChapterHeader(level: number): string {
+    const ch = getChapterForLevel(level);
+    return `
+      <div class="map-chapter-header" data-chapter="${ch.id}">
+        <span class="map-chapter-kicker">Chapter ${ch.id}</span>
+        <span class="map-chapter-name">${ch.name}</span>
+        <span class="map-chapter-sub">${ch.subtitle}</span>
+      </div>
+    `;
   }
 
   private updateNav(level: number): void {
@@ -156,9 +186,11 @@ export class LevelMap {
     );
   }
 
-  /** Ladder rung position — level 1 at bottom, ascending upward. */
   private nodeCenter(index: number, levelCount: number): { x: number; y: number } {
-    const totalH = TOP_PAD + (levelCount - 1) * ROW_H + NODE_H + BOTTOM_PAD;
+    const chapterRows = Array.from({ length: levelCount }, (_, i) => i + 1).filter((lv) =>
+      isChapterStart(lv),
+    ).length;
+    const totalH = TOP_PAD + (levelCount - 1) * ROW_H + chapterRows * CHAPTER_ROW_H + NODE_H + BOTTOM_PAD;
     const rungFromBottom = index;
     const y = totalH - BOTTOM_PAD - NODE_H / 2 - rungFromBottom * ROW_H;
 
@@ -174,7 +206,6 @@ export class LevelMap {
     return ((seed * 1103515245 + 12345) >>> 0) % range;
   }
 
-  /** Imperfect winding path between ladder rungs. */
   private buildImperfectPath(points: { x: number; y: number }[]): string {
     if (points.length === 0) return '';
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
@@ -204,7 +235,10 @@ export class LevelMap {
   private drawTrail(levelCount: number, unlockedLevel: number): void {
     const allPts = Array.from({ length: levelCount }, (_, i) => this.nodeCenter(i, levelCount));
     const activePts = allPts.slice(0, Math.max(1, unlockedLevel));
-    const height = TOP_PAD + (levelCount - 1) * ROW_H + NODE_H + BOTTOM_PAD;
+    const chapterRows = Array.from({ length: levelCount }, (_, i) => i + 1).filter((lv) =>
+      isChapterStart(lv),
+    ).length;
+    const height = TOP_PAD + (levelCount - 1) * ROW_H + chapterRows * CHAPTER_ROW_H + NODE_H + BOTTOM_PAD;
 
     this.trailEl.setAttribute('viewBox', `0 0 ${MAP_W} ${height}`);
     this.trailEl.innerHTML = `

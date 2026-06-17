@@ -17,6 +17,7 @@ import {
   praiseForSpawn,
 } from '../ui/PraiseSystem';
 import { LevelCompleteCard, calcStars } from '../ui/LevelCompleteCard';
+import { coinsForStars, grantCoins } from '../player/Economy';
 import { LevelWelcomeCard } from '../ui/LevelWelcomeCard';
 import { QuitConfirmModal } from '../ui/QuitConfirmModal';
 import { LivesManager, MAX_LIVES, formatRegenCountdown } from '../player/Lives';
@@ -81,9 +82,10 @@ export class CanvasGame {
   private quitModal: QuitConfirmModal;
   private level = 1;
   private levelConfig: LevelConfig = buildLevelConfig(1);
-  private levelTarget: LevelTarget = buildLevelTarget(1, 'easy', 1000);
+  private levelTarget: LevelTarget = buildLevelTarget(1, 'tutorial', 400);
   private stageTheme: StageTheme = getStageTheme('easy');
   private peakCombo = 0;
+  private lastCoinsEarned = 0;
   private levelEnded = false;
   private phase: Phase = 'idle';
   private drag: DragState | null = null;
@@ -682,7 +684,7 @@ export class CanvasGame {
       objectives: this.levelTarget.collectObjectives,
       collected: this.board.getCollectedCounts(),
       difficultyClass: this.stageTheme.hudClass,
-      difficultyTag: getDifficultyTag(this.levelConfig.difficulty),
+      difficultyTag: getDifficultyTag(this.levelConfig.tier),
     });
   }
 
@@ -741,6 +743,7 @@ export class CanvasGame {
       this.levelEnded = true;
       const stars = calcStars(score, target, movesLeft);
       this.levelProgress.recordWin(this.level, stars);
+      this.lastCoinsEarned = grantCoins(coinsForStars(stars));
       this.praise.show({ text: 'Level Complete!', tier: 'legendary', sub: `Level ${this.level}` }, 1800);
       setTimeout(() => this.showLevelEndCard(true), 600);
     } else if (movesLeft <= 0) {
@@ -758,6 +761,8 @@ export class CanvasGame {
     const score = this.board.getScore();
     const movesLeft = this.board.getMoves();
 
+    const stars = calcStars(score, target, movesLeft);
+
     this.levelCard.show(
       {
         level: this.level,
@@ -765,8 +770,9 @@ export class CanvasGame {
         targetScore: target,
         movesLeft,
         maxCombo: this.peakCombo,
-        stars: calcStars(score, target, movesLeft),
+        stars,
         won,
+        coinsEarned: won ? this.lastCoinsEarned : 0,
       },
       {
         canReplay: this.lives.canPlay(),
@@ -793,7 +799,7 @@ export class CanvasGame {
     this.levelConfig = buildLevelConfig(level);
     this.levelTarget = buildLevelTarget(
       level,
-      this.levelConfig.difficulty,
+      this.levelConfig.tier,
       this.levelConfig.targetScore,
     );
     this.stageTheme = getStageTheme(this.levelConfig.difficulty);

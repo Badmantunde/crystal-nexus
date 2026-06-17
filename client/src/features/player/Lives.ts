@@ -70,6 +70,22 @@ export class LivesManager {
     this.persist();
   }
 
+  addLife(count = 1): boolean {
+    this.applyRegeneration();
+    if (this.lives >= MAX_LIVES) return false;
+    this.lives = Math.min(MAX_LIVES, this.lives + count);
+    if (this.lives >= MAX_LIVES) this.regenQueue = [];
+    this.persist();
+    return true;
+  }
+
+  refillAll(): void {
+    this.applyRegeneration();
+    this.lives = MAX_LIVES;
+    this.regenQueue = [];
+    this.persist();
+  }
+
   private applyRegeneration(): void {
     const now = Date.now();
     let changed = false;

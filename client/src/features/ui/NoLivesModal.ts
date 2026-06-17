@@ -5,6 +5,7 @@ export class NoLivesModal {
   private backdrop: HTMLElement;
   private countdownEl: HTMLElement;
   private lives: LivesManager;
+  private onShop: (() => void) | null = null;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(containerId = 'menu-overlay', lives = new LivesManager()) {
@@ -30,6 +31,7 @@ export class NoLivesModal {
             <span class="no-lives-timer-label">Next life in</span>
             <span class="no-lives-timer" id="no-lives-countdown">5:00</span>
           </div>
+          <button type="button" class="cn-btn cn-btn-ghost" id="no-lives-shop">Open Shop</button>
           <button type="button" class="cn-btn cn-btn-primary" id="no-lives-close">Got it</button>
         </div>
       </div>
@@ -39,9 +41,17 @@ export class NoLivesModal {
     this.countdownEl = this.backdrop.querySelector('#no-lives-countdown')!;
 
     this.backdrop.querySelector('#no-lives-close')!.addEventListener('click', () => this.hide());
+    this.backdrop.querySelector('#no-lives-shop')!.addEventListener('click', () => {
+      this.hide();
+      this.onShop?.();
+    });
     this.backdrop.addEventListener('click', (e) => {
       if (e.target === this.backdrop) this.hide();
     });
+  }
+
+  setOnShop(handler: () => void): void {
+    this.onShop = handler;
   }
 
   show(): void {
