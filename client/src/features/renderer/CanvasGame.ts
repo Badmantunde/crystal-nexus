@@ -256,12 +256,12 @@ export class CanvasGame {
 
   private gameLayoutScale(vw: number, vh: number): number {
     const pad = 12;
-    return Math.min(1, (vw - pad) / 390, (vh - pad) / 820);
+    return Math.min(1, (vw - pad) / 390, (vh - pad) / 780);
   }
 
   private bottomChromeReserve(vh: number, scale: number): number {
     const compact = vh < 720;
-    const base = compact ? 96 : 116;
+    const base = compact ? 84 : 100;
     return Math.round(base * scale);
   }
 
@@ -274,27 +274,27 @@ export class CanvasGame {
     overlay?.style.setProperty('--game-ui-scale', String(scale));
     if (overlay) void overlay.offsetHeight;
 
-    const w = Math.min(480, Math.floor(390 * scale), vw - 16);
+    const w = Math.min(520, Math.floor(420 * scale), vw - 12);
 
     let topChrome = Math.round(168 * scale);
     if (this.visible) {
       const stats = document.getElementById('hud-board-stats');
       if (stats) {
         const statsRect = stats.getBoundingClientRect();
-        if (statsRect.height > 0) topChrome = Math.round(statsRect.bottom + 8);
+        if (statsRect.height > 0) topChrome = Math.round(statsRect.bottom + 4);
       }
     }
 
     const bottomReserve = this.bottomChromeReserve(vh, scale);
-    const maxCanvasH = Math.max(220, vh - topChrome - bottomReserve);
-    const h = Math.min(maxCanvasH, Math.round(w * (vh < 720 ? 1.18 : 1.28)));
+    const maxCanvasH = Math.max(240, vh - topChrome - bottomReserve);
+    const h = maxCanvasH;
 
     const container = document.getElementById('game-container');
     if (container) {
       if (this.visible) {
         container.style.alignItems = 'flex-start';
         container.style.justifyContent = 'center';
-        container.style.paddingTop = `${Math.max(0, topChrome - 8)}px`;
+        container.style.paddingTop = `${Math.max(0, topChrome - 4)}px`;
         container.style.paddingBottom = `${bottomReserve}px`;
         container.style.boxSizing = 'border-box';
       } else {
@@ -312,7 +312,7 @@ export class CanvasGame {
     this.canvas.height = Math.floor(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const pad = 14;
+    const pad = 8;
     let top = this.computeBoardTop(w, h, pad);
     const boardW = w - pad * 2;
     let boardH = h - top - pad;
@@ -369,7 +369,7 @@ export class CanvasGame {
     let targetImageTop = 168;
     if (this.visible && stats && canvasRect.height > 0) {
       const statsRect = stats.getBoundingClientRect();
-      targetImageTop = statsRect.bottom - canvasRect.top + 20;
+      targetImageTop = statsRect.bottom - canvasRect.top + 10;
       targetImageTop = Math.max(120, Math.min(targetImageTop, h - 200));
     }
 
