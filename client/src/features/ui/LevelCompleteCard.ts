@@ -1,3 +1,5 @@
+import { STAR_ACTIVE_URL, STAR_INACTIVE_URL } from './UiChrome';
+
 export interface LevelStats {
   level: number;
   score: number;
@@ -41,9 +43,9 @@ export class LevelCompleteCard {
         <h2 class="complete-title" id="lc-title">Level 1</h2>
         <p class="complete-stars-label">Performance</p>
         <div class="complete-stars" id="lc-stars" aria-label="Stars earned">
-          <span class="star-icon" data-i="1"></span>
-          <span class="star-icon" data-i="2"></span>
-          <span class="star-icon" data-i="3"></span>
+          <img class="star-icon" data-i="1" src="${STAR_INACTIVE_URL}" width="32" height="32" alt="" />
+          <img class="star-icon" data-i="2" src="${STAR_INACTIVE_URL}" width="32" height="32" alt="" />
+          <img class="star-icon" data-i="3" src="${STAR_INACTIVE_URL}" width="32" height="32" alt="" />
         </div>
         <div class="complete-stats">
           <div class="cn-stat-pill">
@@ -105,10 +107,12 @@ export class LevelCompleteCard {
     this.backdrop.querySelector('#lc-moves')!.textContent = String(stats.movesLeft);
     this.backdrop.querySelector('#lc-combo')!.textContent = `×${stats.maxCombo}`;
 
-    const stars = this.backdrop.querySelectorAll('.star-icon');
+    const stars = this.backdrop.querySelectorAll<HTMLImageElement>('.star-icon');
     stars.forEach((el) => {
-      const n = Number((el as HTMLElement).dataset.i);
-      el.classList.toggle('earned', won && n <= stats.stars);
+      const n = Number(el.dataset.i);
+      const earned = won && n <= stats.stars;
+      el.src = earned ? STAR_ACTIVE_URL : STAR_INACTIVE_URL;
+      el.classList.toggle('earned', earned);
     });
 
     const replayBtn = this.backdrop.querySelector('#lc-replay') as HTMLButtonElement;

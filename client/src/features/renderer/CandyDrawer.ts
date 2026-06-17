@@ -1,5 +1,6 @@
 import type { CrystalCategory } from '@crystal-nexus/shared';
 import { getCandyStyle, type CandyShape } from '../candy/CandyTypes';
+import { getFruitForCategory, getFruitSprite } from '../candy/fruitAssets';
 import type { SpecialType } from '../candy/CandyCell';
 
 export function drawCandy(
@@ -17,26 +18,36 @@ export function drawCandy(
     lite?: boolean;
   } = {},
 ): void {
-  const style = getCandyStyle(category);
   const alpha = opts.alpha ?? 1;
   const scale = opts.scale ?? 1;
-  const r = size * 0.38 * scale;
   const cx = x + (opts.shakeX ?? 0);
   const cy = y + (opts.shakeY ?? 0);
+  const fruitKind = getFruitForCategory(category);
+  const sprite = fruitKind ? getFruitSprite(fruitKind) : undefined;
 
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  if (!opts.lite) {
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + r * 0.14, r * 0.82, r * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
+  if (sprite) {
+    const drawSize = size * 0.92 * scale;
+    ctx.drawImage(sprite, cx - drawSize / 2, cy - drawSize / 2, drawSize, drawSize);
+  } else {
+    const style = getCandyStyle(category);
+    const r = size * 0.38 * scale;
+
+    if (!opts.lite) {
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + r * 0.14, r * 0.82, r * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    drawShape(ctx, cx, cy, r, style.shape, style.color, style.dark, style.highlight);
   }
 
-  drawShape(ctx, cx, cy, r, style.shape, style.color, style.dark, style.highlight);
-
   if (opts.special && opts.special !== 'none') {
+    const style = getCandyStyle(category);
+    const r = size * 0.38 * scale;
     drawSpecialOverlay(ctx, cx, cy, r, opts.special, style.color);
   }
 

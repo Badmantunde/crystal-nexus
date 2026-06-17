@@ -50,6 +50,7 @@ export class SimpleBoard {
   private _score = 0;
   private _moves = 30;
   private _combo = 0;
+  private collected: Partial<Record<CrystalCategory, number>> = {};
   private lastPivot: CellPos | null = null;
   private lastSwipeAxis: SwipeAxis = 'horizontal';
 
@@ -83,6 +84,17 @@ export class SimpleBoard {
     return this._combo;
   }
 
+  getCollectedCounts(): Readonly<Partial<Record<CrystalCategory, number>>> {
+    return this.collected;
+  }
+
+  private tallyClears(cells: CellPos[]): void {
+    for (const { row, col } of cells) {
+      const cat = cellCategory(this.grid[row][col]);
+      if (cat) this.collected[cat] = (this.collected[cat] ?? 0) + 1;
+    }
+  }
+
   isAdjacent(r1: number, c1: number, r2: number, c2: number): boolean {
     return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
   }
@@ -99,9 +111,49 @@ export class SimpleBoard {
     if (isSpecial(a) || isSpecial(b)) return true;
 
     this.swapCells(r1, c1, r2, c2);
-    const ok = this.findMatches().length > 0;
+    const ok = this.hasMatchAt(r1, c1) || this.hasMatchAt(r2, c2);
     this.swapCells(r1, c1, r2, c2);
     return ok;
+  }
+
+  private matchRunLen(r: number, c: number, dr: number, dc: number): number {
+    const cat = cellCategory(this.grid[r][c]);
+    if (cat === null) return 0;
+
+    let count = 1;
+    let rr = r + dr;
+    let cc = c + dc;
+    while (
+      rr >= 0 &&
+      rr < this.rows &&
+      cc >= 0 &&
+      cc < this.cols &&
+      cellCategory(this.grid[rr][cc]) === cat
+    ) {
+      count++;
+      rr += dr;
+      cc += dc;
+    }
+
+    rr = r - dr;
+    cc = c - dc;
+    while (
+      rr >= 0 &&
+      rr < this.rows &&
+      cc >= 0 &&
+      cc < this.cols &&
+      cellCategory(this.grid[rr][cc]) === cat
+    ) {
+      count++;
+      rr -= dr;
+      cc -= dc;
+    }
+
+    return count;
+  }
+
+  private hasMatchAt(r: number, c: number): boolean {
+    return this.matchRunLen(r, c, 0, 1) >= 3 || this.matchRunLen(r, c, 1, 0) >= 3;
   }
 
   findMatches(): MatchLine[] {
@@ -169,9 +221,10 @@ export class SimpleBoard {
     r2: number,
     c2: number,
     swipeAxis: SwipeAxis,
+    opts?: { skipValidate?: boolean },
   ): boolean {
     if (!this.isAdjacent(r1, c1, r2, c2) || this._moves <= 0) return false;
-    if (!this.wouldMatchAfterSwap(r1, c1, r2, c2)) return false;
+    if (!opts?.skipValidate && !this.wouldMatchAfterSwap(r1, c1, r2, c2)) return false;
 
     this.swapCells(r1, c1, r2, c2);
     this._moves--;
@@ -435,6 +488,8 @@ export class SimpleBoard {
   clearWaveCells(wave: ClearWave): void {
     const spawnKey = wave.spawn ? `${wave.spawn.pos.row},${wave.spawn.pos.col}` : '';
 
+    this.tallyClears(wave.cells.filter(({ row, col }) => `${row},${col}` !== spawnKey));
+
     for (const { row, col } of wave.cells) {
       if (`${row},${col}` === spawnKey) continue;
       this.grid[row][col] = null;
@@ -509,6 +564,7 @@ export class SimpleBoard {
   }
 
   clearCells(cells: CellPos[]): void {
+    this.tallyClears(cells);
     for (const { row, col } of cells) this.grid[row][col] = null;
   }
 

@@ -1,4 +1,5 @@
 import type { LevelProgress } from './LevelProgress';
+import { buildLevelConfig } from './LevelDifficulty';
 
 export interface PlayerRank {
   name: string;
@@ -19,6 +20,18 @@ export function getRankFromStars(totalStars: number): PlayerRank {
   if (totalStars >= 20) return { name: 'Nova', tier: 3 };
   if (totalStars >= 8) return { name: 'Spark', tier: 2 };
   return { name: 'Rookie', tier: 1 };
+}
+
+export function getProfileScore(progress: LevelProgress): number {
+  let score = 0;
+  for (let i = 1; i <= progress.getTotalLevels(); i++) {
+    const stars = progress.getStars(i);
+    if (stars > 0) {
+      const cfg = buildLevelConfig(i);
+      score += Math.round(cfg.targetScore * (0.5 + stars * 0.25));
+    }
+  }
+  return score || progress.getUnlockedLevel() * 100;
 }
 
 export function getAvatarInitials(): string {

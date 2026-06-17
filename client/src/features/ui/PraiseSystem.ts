@@ -8,15 +8,16 @@ export interface PraiseMessage {
   text: string;
   tier: PraiseTier;
   sub?: string;
+  combo?: number;
 }
 
 export function praiseForCombo(combo: number): PraiseMessage | null {
   if (combo < 2) return null;
-  if (combo === 2) return { text: 'Nice!', tier: 'nice' };
-  if (combo === 3) return { text: 'Sweet!', tier: 'great' };
-  if (combo === 4) return { text: 'Delicious!', tier: 'great' };
-  if (combo === 5) return { text: 'Divine!', tier: 'amazing' };
-  return { text: 'Unbelievable!', tier: 'legendary', sub: `×${combo} combo` };
+  if (combo === 2) return { text: 'Nice!', tier: 'nice', combo };
+  if (combo === 3) return { text: 'Sweet!', tier: 'great', combo };
+  if (combo === 4) return { text: 'Delicious!', tier: 'great', combo };
+  if (combo === 5) return { text: 'Divine!', tier: 'amazing', combo };
+  return { text: 'Unbelievable!', tier: 'legendary', combo, sub: 'Keep it going!' };
 }
 
 export function praiseForSpawn(special: SpecialType): PraiseMessage {

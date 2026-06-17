@@ -1,4 +1,16 @@
-import { livesPillHtml } from './UiChrome';
+import { TopBanner, type TopBannerState } from './TopBanner';
+import type { LevelObjective, TargetTaskType } from '../player/LevelObjectives';
+import { getObjectiveRemainingCount } from '../player/LevelObjectives';
+import type { FruitKind } from '../candy/fruitAssets';
+import { FRUIT_URLS } from '../candy/fruitAssets';
+import type { CrystalCategory } from '@crystal-nexus/shared';
+
+const HUD_FRUIT_ORDER: FruitKind[] = ['orange', 'apple', 'pear'];
+const VOLUME_MUTED_KEY = 'cn-muted';
+
+function hudFruitImg(kind: FruitKind): string {
+  return `<img class="hud-fruit" src="${FRUIT_URLS[kind]}" width="22" height="22" alt="" aria-hidden="true" />`;
+}
 
 export interface HUDState {
   score: number;
@@ -7,36 +19,36 @@ export interface HUDState {
   level: number;
   lives: number;
   maxLives: number;
+  livesRegenMs?: number | null;
   rank: string;
-  avatar: string;
   difficultyLabel?: string;
   difficultyClass?: string;
+  difficultyTag?: string;
+  targetTask?: TargetTaskType;
   targetScore?: number;
+  objectives?: LevelObjective[];
+  collected?: Readonly<Partial<Record<CrystalCategory, number>>>;
   message?: string;
-  bossName?: string;
-  bossHp?: number;
-  bossMaxHp?: number;
-  isBossFight?: boolean;
 }
 
 export class HUD {
-  private overlay: HTMLElement;
-  private scoreEl: HTMLElement;
+  private hudRoot: HTMLElement;
+  private banner: TopBanner;
+  private targetCardEl: HTMLElement;
+  private targetScoreValEl: HTMLElement;
+  private targetProgressFillEl: HTMLElement;
   private movesEl: HTMLElement;
-  private comboEl: HTMLElement;
-  private levelEl: HTMLElement;
-  private rankEl: HTMLElement;
-  private avatarEl: HTMLElement;
   private messageEl: HTMLElement;
-  private bossBar: HTMLElement;
-  private bossNameEl: HTMLElement;
-  private bossHpFill: HTMLElement;
-  private bossHpText: HTMLElement;
-  private targetEl: HTMLElement;
-  private scoreFillEl: HTMLElement;
-  private livesEl: HTMLElement;
-  private difficultyEl: HTMLElement;
+  private targetItemEls: HTMLElement[];
+  private boardFooterEl: HTMLElement;
+  private sideToolbarEl: HTMLElement;
+  private diffTextEl: HTMLElement;
+  private restartBtn: HTMLButtonElement;
+  private volumeBtn: HTMLButtonElement;
+  private onRestart: (() => void) | null = null;
   private onQuit: (() => void) | null = null;
+  private onSettings: (() => void) | null = null;
+  private muted = false;
 
   constructor(containerId = 'ui-overlay') {
     const container = document.getElementById(containerId);
@@ -44,126 +56,185 @@ export class HUD {
 
     container.innerHTML = `
       <div class="hud">
-        <div class="hud-bar">
-          <div class="player-chip">
-            <div class="player-avatar" id="hud-avatar">CN</div>
-            <div class="player-chip-info">
-              <span class="player-chip-level">LV <span id="hud-level">1</span></span>
-              <span class="player-chip-rank" id="hud-rank">Rookie</span>
-            </div>
-          </div>
-          <div class="hud-bar-actions">
-            <button type="button" class="hud-quit-btn" id="hud-quit">Quit</button>
-            <div id="hud-lives"></div>
-          </div>
-        </div>
-        <div class="hud-difficulty diff-easy" id="hud-difficulty">Easy Stage</div>
-        <div class="hud-boss boss-hidden" id="hud-boss">
-          <div class="boss-header">
-            <span class="boss-icon"></span>
-            <span class="boss-name" id="hud-boss-name">Boss</span>
-          </div>
-          <div class="boss-hp-track">
-            <div class="boss-hp-fill" id="hud-boss-hp-fill"></div>
-          </div>
-          <div class="boss-hp-text" id="hud-boss-hp-text">0 / 0</div>
-        </div>
+        <div id="hud-banner-slot"></div>
         <div class="hud-board-stats">
-          <div class="hud-score-card">
+          <div class="hud-score-card hud-target-card hud-target-card--score" id="hud-target-card">
             <div class="hud-card-head">
-              <span class="hud-card-icon hud-icon-score"></span>
-              <span class="hud-card-label">Score</span>
+              <span class="hud-card-icon"></span>
+              <span class="hud-card-label">Target</span>
             </div>
-            <span class="hud-score-value" id="hud-score">0</span>
-            <div class="hud-progress-track">
-              <div class="hud-progress-fill" id="hud-score-fill"></div>
+            <div class="hud-target-score-panel" id="hud-target-score-panel">
+              <span class="hud-target-score-val" id="hud-target-score-val">0/120</span>
+              <div class="hud-target-progress-track">
+                <div class="hud-target-progress-fill" id="hud-target-progress-fill"></div>
+              </div>
             </div>
-            <span class="hud-score-target" id="hud-target">0 / 1,000</span>
+            <div class="hud-target-row" id="hud-target-collect-panel">
+              <div class="hud-target-item" data-fruit="orange">
+                ${hudFruitImg('orange')}
+                <span class="hud-target-count" id="hud-target-orange">120</span>
+              </div>
+              <div class="hud-target-item" data-fruit="apple">
+                ${hudFruitImg('apple')}
+                <span class="hud-target-count" id="hud-target-apple">120</span>
+              </div>
+              <div class="hud-target-item" data-fruit="pear">
+                ${hudFruitImg('pear')}
+                <span class="hud-target-count" id="hud-target-pear">120</span>
+              </div>
+            </div>
           </div>
           <div class="hud-moves-card">
             <div class="hud-card-head">
-              <span class="hud-card-icon hud-icon-moves"></span>
+              <span class="hud-card-icon"></span>
               <span class="hud-card-label">Moves</span>
             </div>
-            <span class="hud-moves-value" id="hud-moves">30</span>
-            <span class="hud-moves-sub">swaps left</span>
-          </div>
-          <div class="hud-combo-card combo-hidden" id="hud-combo-wrap">
-            <div class="hud-card-head">
-              <span class="hud-card-icon hud-icon-combo"></span>
-              <span class="hud-card-label">Combo</span>
+            <div class="hud-moves-body">
+              <span class="hud-moves-value" id="hud-moves">30</span>
+              <span class="hud-moves-sub">Moves Left</span>
             </div>
-            <span class="hud-combo-value" id="hud-combo">x2</span>
           </div>
+        </div>
+        <div class="hud-board-footer" id="hud-board-footer">
+          <div class="hud-board-footer-row">
+            <div class="hud-diff-pill" id="hud-diff-pill">
+              <div class="hud-diff-pill-outer" aria-hidden="true"></div>
+              <div class="hud-diff-pill-inner">
+                <span class="hud-diff-pill-text" id="hud-diff-text">EASY</span>
+              </div>
+            </div>
+            <button type="button" class="hud-icon-btn" id="hud-restart" aria-label="Restart level">
+              <img src="/refresh.svg" width="24" height="24" alt="" />
+            </button>
+          </div>
+        </div>
+        <div class="hud-side-toolbar" id="hud-side-toolbar">
+          <button type="button" class="hud-icon-btn" id="hud-exit" aria-label="Exit level">
+            <img src="/exit.svg" width="24" height="24" alt="" />
+          </button>
+          <button type="button" class="hud-icon-btn" id="hud-settings" aria-label="Settings">
+            <img src="/setting.svg" width="24" height="24" alt="" />
+          </button>
+          <button type="button" class="hud-icon-btn" id="hud-volume" aria-label="Toggle sound">
+            <img src="/volume.svg" width="24" height="24" alt="" />
+          </button>
         </div>
         <div class="hud-message" id="hud-message"></div>
       </div>
     `;
 
-    this.overlay = container;
-    this.scoreEl = container.querySelector('#hud-score')!;
+    this.hudRoot = container.querySelector('.hud')!;
+    this.banner = new TopBanner(container.querySelector('#hud-banner-slot')!, {
+      showQuit: false,
+    });
+    this.targetCardEl = container.querySelector('#hud-target-card')!;
+    this.targetScoreValEl = container.querySelector('#hud-target-score-val')!;
+    this.targetProgressFillEl = container.querySelector('#hud-target-progress-fill')!;
     this.movesEl = container.querySelector('#hud-moves')!;
-    this.comboEl = container.querySelector('#hud-combo')!;
-    this.levelEl = container.querySelector('#hud-level')!;
-    this.rankEl = container.querySelector('#hud-rank')!;
-    this.avatarEl = container.querySelector('#hud-avatar')!;
     this.messageEl = container.querySelector('#hud-message')!;
-    this.bossBar = container.querySelector('#hud-boss')!;
-    this.bossNameEl = container.querySelector('#hud-boss-name')!;
-    this.bossHpFill = container.querySelector('#hud-boss-hp-fill')!;
-    this.bossHpText = container.querySelector('#hud-boss-hp-text')!;
-    this.targetEl = container.querySelector('#hud-target')!;
-    this.scoreFillEl = container.querySelector('#hud-score-fill')!;
-    this.livesEl = container.querySelector('#hud-lives')!;
-    this.difficultyEl = container.querySelector('#hud-difficulty')!;
+    this.targetItemEls = [
+      container.querySelector('#hud-target-orange')!,
+      container.querySelector('#hud-target-apple')!,
+      container.querySelector('#hud-target-pear')!,
+    ];
+    this.boardFooterEl = container.querySelector('#hud-board-footer')!;
+    this.sideToolbarEl = container.querySelector('#hud-side-toolbar')!;
+    this.diffTextEl = container.querySelector('#hud-diff-text')!;
+    this.restartBtn = container.querySelector('#hud-restart')!;
+    this.volumeBtn = container.querySelector('#hud-volume')!;
 
-    container.querySelector('#hud-quit')!.addEventListener('click', () => this.onQuit?.());
+    this.restartBtn.addEventListener('click', () => this.onRestart?.());
+    container.querySelector('#hud-exit')!.addEventListener('click', () => this.onQuit?.());
+    container.querySelector('#hud-settings')!.addEventListener('click', () => this.onSettings?.());
+
+    this.muted = localStorage.getItem(VOLUME_MUTED_KEY) === '1';
+    this.syncVolumeButton();
+    this.volumeBtn.addEventListener('click', () => {
+      this.muted = !this.muted;
+      localStorage.setItem(VOLUME_MUTED_KEY, this.muted ? '1' : '0');
+      this.syncVolumeButton();
+    });
+  }
+
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  private syncVolumeButton(): void {
+    this.volumeBtn.classList.toggle('hud-icon-btn--muted', this.muted);
+    this.volumeBtn.setAttribute('aria-label', this.muted ? 'Unmute sound' : 'Mute sound');
+  }
+
+  setBoardFooterAnchor(boardBottom: number, centerX: number): void {
+    const footerGap = 12;
+    const toolbarGap = 90;
+    const footerRowHeight = 40;
+
+    this.boardFooterEl.style.top = `${boardBottom + footerGap}px`;
+    this.boardFooterEl.style.left = `${centerX}px`;
+
+    this.sideToolbarEl.style.top = `${boardBottom + footerGap + footerRowHeight + toolbarGap}px`;
+    this.sideToolbarEl.style.right = '20px';
+    this.sideToolbarEl.style.bottom = 'auto';
+    this.sideToolbarEl.style.left = 'auto';
+  }
+
+  setOnRestart(handler: () => void): void {
+    this.onRestart = handler;
   }
 
   setOnQuit(handler: () => void): void {
     this.onQuit = handler;
   }
 
+  setOnSettings(handler: () => void): void {
+    this.onSettings = handler;
+  }
+
   update(state: HUDState): void {
-    this.scoreEl.textContent = state.score.toLocaleString();
+    const bannerState: TopBannerState = {
+      level: state.level,
+      rank: state.rank,
+      lives: state.lives,
+      livesRegenMs: state.livesRegenMs,
+      combo: state.combo,
+      score: state.score,
+    };
+    this.banner.update(bannerState);
+
     this.movesEl.textContent = String(state.moves);
-    this.levelEl.textContent = String(state.level);
-    this.rankEl.textContent = state.rank;
-    this.avatarEl.textContent = state.avatar;
-    this.livesEl.innerHTML = livesPillHtml(state.lives);
-    this.livesEl.setAttribute('aria-label', `${state.lives} lives`);
 
-    if (state.difficultyLabel && state.difficultyClass) {
-      this.difficultyEl.textContent = state.difficultyLabel;
-      this.difficultyEl.className = `hud-difficulty ${state.difficultyClass}`;
-      this.difficultyEl.style.display = '';
-    }
+    const task = state.targetTask ?? 'score';
+    this.targetCardEl.classList.toggle('hud-target-card--score', task === 'score');
+    this.targetCardEl.classList.toggle('hud-target-card--collect', task === 'collect');
 
-    if (state.isBossFight) {
-      this.targetEl.textContent = 'Boss objective';
-      this.scoreFillEl.style.width = '0%';
-      this.bossBar.classList.remove('boss-hidden');
-      this.bossNameEl.textContent = state.bossName ?? 'Boss';
-      const pct =
-        state.bossMaxHp && state.bossHp !== undefined
-          ? (state.bossHp / state.bossMaxHp) * 100
-          : 0;
-      this.bossHpFill.style.width = `${pct}%`;
-      this.bossHpText.textContent = `${state.bossHp ?? 0} / ${state.bossMaxHp ?? 0}`;
-    } else {
-      this.bossBar.classList.add('boss-hidden');
+    if (task === 'score') {
       const target = state.targetScore ?? 1;
-      const pct = Math.min(100, (state.score / target) * 100);
-      this.scoreFillEl.style.width = `${pct}%`;
-      this.targetEl.textContent = `${state.score.toLocaleString()} / ${target.toLocaleString()}`;
+      const score = state.score;
+      this.targetScoreValEl.textContent = `${score}/${target.toLocaleString()}`;
+      const pct = Math.min(100, (score / target) * 100);
+      this.targetProgressFillEl.style.width = `${pct}%`;
+    } else {
+      const objectives = state.objectives ?? [];
+      const collected = state.collected ?? {};
+      const fruitOrder = HUD_FRUIT_ORDER;
+      fruitOrder.forEach((fruit, i) => {
+        const objective = objectives.find((o) => o.fruit === fruit);
+        const remaining = objective
+          ? getObjectiveRemainingCount(objective, collected)
+          : 0;
+        this.targetItemEls[i].textContent = String(remaining);
+        this.targetItemEls[i].classList.toggle('hud-target-count--done', remaining === 0);
+      });
     }
 
-    const comboWrap = this.overlay.querySelector('#hud-combo-wrap')!;
-    if (state.combo > 1) {
-      comboWrap.classList.remove('combo-hidden');
-      this.comboEl.textContent = `x${state.combo}`;
-    } else {
-      comboWrap.classList.add('combo-hidden');
+    if (state.difficultyTag) {
+      this.diffTextEl.textContent = state.difficultyTag;
+    }
+    if (state.difficultyClass) {
+      this.hudRoot.className = `hud ${state.difficultyClass}`;
+      this.boardFooterEl.querySelector('#hud-diff-pill')!.className =
+        `hud-diff-pill ${state.difficultyClass}`;
     }
 
     if (state.message) {

@@ -6,6 +6,7 @@ import {
   type FallMove,
 } from '../match3/SimpleBoard';
 import { drawCandy } from './CandyDrawer';
+import { preloadFruitSprites } from '../candy/fruitAssets';
 import { drawLineBlast, blastCellVanish, blastScreenFlash, blastShakeIntensity } from './BlastDrawer';
 import { HUD } from '../ui/HUD';
 import { PraiseOverlay } from '../ui/PraiseOverlay';
@@ -18,23 +19,37 @@ import {
 import { LevelCompleteCard, calcStars } from '../ui/LevelCompleteCard';
 import { LevelWelcomeCard } from '../ui/LevelWelcomeCard';
 import { QuitConfirmModal } from '../ui/QuitConfirmModal';
-import { LivesManager, MAX_LIVES } from '../player/Lives';
+import { LivesManager, MAX_LIVES, formatRegenCountdown } from '../player/Lives';
 import { LevelProgress } from '../player/LevelProgress';
 import {
   buildLevelConfig,
+  applyDifficultyThemeClass,
+  clearDifficultyThemeClass,
+  getDifficultyTag,
   getStageTheme,
+  getUIColors,
   type LevelConfig,
   type StageTheme,
 } from '../player/LevelDifficulty';
 import {
   countTotalStars,
-  getAvatarInitials,
   getRankFromStars,
 } from '../player/PlayerProfile';
+import {
+  buildLevelTarget,
+  isLevelTargetComplete,
+  type LevelTarget,
+} from '../player/LevelObjectives';
 
 const ROWS = 8;
 const COLS = 8;
-const SWIPE_PX = 18;
+const SWIPE_PX = 12;
+const DRAG_FOLLOW = 0.92;
+const GAME_BOARD_URL = '/game-board.svg';
+const GAME_BOARD_VIEWBOX = 350;
+const GAME_BOARD_GRID_X = 7;
+const GAME_BOARD_GRID_Y = 6.5;
+const GAME_BOARD_GRID_SIZE = 336;
 
 type Phase = 'idle' | 'swap' | 'revert' | 'blast' | 'shake' | 'vanish' | 'fall' | 'pause';
 
@@ -45,6 +60,9 @@ interface DragState {
   startY: number;
   curX: number;
   curY: number;
+  axis?: SwipeAxis;
+  neighborRow?: number;
+  neighborCol?: number;
 }
 
 interface AnimCell {
@@ -66,6 +84,7 @@ export class CanvasGame {
   private quitModal: QuitConfirmModal;
   private level = 1;
   private levelConfig: LevelConfig = buildLevelConfig(1);
+  private levelTarget: LevelTarget = buildLevelTarget(1, 'easy', 1000);
   private stageTheme: StageTheme = getStageTheme('easy');
   private peakCombo = 0;
   private levelEnded = false;
@@ -74,14 +93,18 @@ export class CanvasGame {
   private animCells: AnimCell[] = [];
   private swapPair: { a: CellPos; b: CellPos } | null = null;
   private swapProgress = 0;
+  private swapAnimFrom = 0;
+  private swipeLock = false;
   private animStart = 0;
   private animDuration = 0;
   private animResolve: (() => void) | null = null;
   private raf = 0;
   private boardPx = { x: 0, y: 0, cell: 0, w: 0, h: 0 };
-  private bgCanvas: HTMLCanvasElement | null = null;
-  private pendingSwipe: { r1: number; c1: number; r2: number; c2: number; axis: SwipeAxis } | null =
-    null;
+  private boardLayer: HTMLCanvasElement | null = null;
+  private boardLayerKey = '';
+  private canvasRect: DOMRect | null = null;
+  private boardImage: HTMLImageElement;
+  private boardImageReady = false;
   private activeBlast: SpecialBlast | null = null;
   private blastProgress = 0;
   private fallMoves: FallMove[] = [];
@@ -92,12 +115,20 @@ export class CanvasGame {
   private dirty = true;
   private visible = false;
   private tutorialShown = false;
+  private lastLivesTick = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'game-canvas';
     this.canvas.className = 'game-hidden';
     this.ctx = this.canvas.getContext('2d', { alpha: false })!;
+    this.boardImage = new Image();
+    this.boardImage.onload = () => {
+      this.boardImageReady = true;
+      this.markDirty();
+    };
+    this.boardImage.src = GAME_BOARD_URL;
+    void preloadFruitSprites().then(() => this.markDirty());
 
     container.innerHTML = '';
     container.appendChild(this.canvas);
@@ -112,12 +143,19 @@ export class CanvasGame {
     this.board = new SimpleBoard(ROWS, COLS, 30);
 
     this.hud.setOnQuit(() => this.requestQuit());
+    this.hud.setOnSettings(() => this.hud.showToast('Settings coming soon', 2200));
+    this.hud.setOnRestart(() => this.restartLevel());
     this.bindInput();
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
     const loop = (t: number) => {
       if (this.visible) {
+        if (this.lives.hasPendingRegen() && t - this.lastLivesTick >= 1000) {
+          this.lastLivesTick = t;
+          this.lives.tick();
+          this.updateHud();
+        }
         this.tick(t);
         const animating =
           this.phase !== 'idle' || this.drag !== null || this.activeBlast !== null;
@@ -138,12 +176,19 @@ export class CanvasGame {
   show(): void {
     this.visible = true;
     this.canvas.classList.remove('game-hidden');
+    document.getElementById('ui-overlay')?.classList.remove('hud-hidden');
+    this.resize();
+    requestAnimationFrame(() => {
+      if (this.visible) this.resize();
+    });
     this.markDirty();
   }
 
   hide(): void {
     this.visible = false;
     this.canvas.classList.add('game-hidden');
+    document.getElementById('ui-overlay')?.classList.add('hud-hidden');
+    clearDifficultyThemeClass();
     this.levelWelcome.hide();
     this.levelCard.hide();
     this.quitModal.hide();
@@ -152,11 +197,20 @@ export class CanvasGame {
 
   beginLevel(level: number): void {
     if (!this.lives.canPlay()) {
-      this.hud.showToast('No lives left!', 3000);
+      this.showNoLivesToast();
       this.onReturnToMap?.();
       return;
     }
     this.startLevel(level);
+  }
+
+  private showNoLivesToast(): void {
+    const ms = this.lives.getNextRegenMs();
+    const msg =
+      ms !== null
+        ? `No lives! Next life in ${formatRegenCountdown(ms)}`
+        : 'No lives left!';
+    this.hud.showToast(msg, 4000);
   }
 
   private resize(): void {
@@ -171,10 +225,17 @@ export class CanvasGame {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const pad = 14;
-    const top = 168;
+    let top = this.computeBoardTop(w, h, pad);
     const boardW = w - pad * 2;
-    const boardH = h - top - pad;
-    const cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
+    let boardH = h - top - pad;
+    let cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
+
+    if (cell < 12) {
+      top = 168;
+      boardH = h - top - pad;
+      cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
+    }
+
     const gridW = cell * COLS;
     const gridH = cell * ROWS;
 
@@ -186,71 +247,134 @@ export class CanvasGame {
       h: gridH,
     };
 
-    this.cacheBackground(w, h);
+    this.rebuildBoardLayer(w, h);
+    this.positionBoardFooter();
     this.dirty = true;
+  }
+
+  private boardLayerCacheKey(w: number, h: number): string {
+    return `${w}x${h}|${this.levelConfig.difficulty}`;
+  }
+
+  private invalidateBoardLayer(): void {
+    this.boardLayerKey = '';
+  }
+
+  /** Keep 20px between HUD cards and the top of the game board art. */
+  private boardImageTopForLayout(top: number, w: number, h: number, pad: number): number {
+    const boardW = w - pad * 2;
+    const boardH = h - top - pad;
+    if (boardH <= 0) return Number.POSITIVE_INFINITY;
+
+    const cell = Math.floor(Math.min(boardW / COLS, boardH / ROWS));
+    if (cell <= 0) return Number.POSITIVE_INFINITY;
+
+    const gridH = cell * ROWS;
+    const scaleY = gridH / GAME_BOARD_GRID_SIZE;
+    return top + (boardH - gridH) / 2 - GAME_BOARD_GRID_Y * scaleY;
+  }
+
+  private computeBoardTop(w: number, h: number, pad: number): number {
+    const stats = document.getElementById('hud-board-stats');
+    const canvasRect = this.canvas.getBoundingClientRect();
+
+    let targetImageTop = 168;
+    if (this.visible && stats && canvasRect.height > 0) {
+      const statsRect = stats.getBoundingClientRect();
+      targetImageTop = statsRect.bottom - canvasRect.top + 20;
+      targetImageTop = Math.max(120, Math.min(targetImageTop, h - 200));
+    }
+
+    let lo = 100;
+    let hi = h - pad - 64;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      const imageTop = this.boardImageTopForLayout(mid, w, h, pad);
+      if (imageTop < targetImageTop) lo = mid;
+      else hi = mid;
+    }
+
+    return Math.round((lo + hi) / 2);
+  }
+
+  private positionBoardFooter(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const board = this.boardImageRect();
+    const centerX = rect.left + board.x + board.w / 2;
+    const boardBottom = rect.top + board.y + board.h;
+    this.hud.setBoardFooterAnchor(boardBottom, centerX);
   }
 
   private markDirty(): void {
     this.dirty = true;
   }
 
-  private cacheBackground(w: number, h: number): void {
-    const theme = this.stageTheme;
-    const { x, y, cell, w: bw, h: bh } = this.boardPx;
-    this.bgCanvas = document.createElement('canvas');
-    this.bgCanvas.width = w;
-    this.bgCanvas.height = h;
-    const bctx = this.bgCanvas.getContext('2d')!;
+  private rebuildBoardLayer(w?: number, h?: number): void {
+    const dpr = window.devicePixelRatio || 1;
+    const layerW = w ?? this.canvas.width / Math.min(dpr, 2);
+    const layerH = h ?? this.canvas.height / Math.min(dpr, 2);
+    if (layerW <= 0 || layerH <= 0) return;
 
-    const bg = bctx.createLinearGradient(0, 0, w, h);
-    bg.addColorStop(0, theme.bg[0]);
-    bg.addColorStop(0.45, theme.bg[1]);
-    bg.addColorStop(1, theme.bg[2]);
+    const key = this.boardLayerCacheKey(layerW, layerH);
+    if (this.boardLayer && this.boardLayerKey === key) return;
+
+    this.boardLayer = document.createElement('canvas');
+    this.boardLayer.width = layerW;
+    this.boardLayer.height = layerH;
+    this.boardLayerKey = key;
+    const bctx = this.boardLayer.getContext('2d')!;
+
+    const colors = getUIColors(this.levelConfig.difficulty);
+    const bg = bctx.createLinearGradient(0, 0, 0, layerH);
+    bg.addColorStop(0, colors.bgTop);
+    bg.addColorStop(1, colors.bgBottom);
     bctx.fillStyle = bg;
-    bctx.fillRect(0, 0, w, h);
+    bctx.fillRect(0, 0, layerW, layerH);
+  }
 
-    for (let i = 0; i < 6; i++) {
-      const sx = ((i * 97 + 13) % 100) / 100 * w;
-      const sy = ((i * 53 + 29) % 100) / 100 * h;
-      const g = bctx.createRadialGradient(sx, sy, 0, sx, sy, 50);
-      g.addColorStop(0, theme.glow);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      bctx.fillStyle = g;
-      bctx.beginPath();
-      bctx.arc(sx, sy, 50, 0, Math.PI * 2);
-      bctx.fill();
-    }
+  private drawBoardFrame(): void {
+    const colors = getUIColors(this.levelConfig.difficulty);
+    const rect = this.boardImageRect();
+    const difficulty = this.levelConfig.difficulty;
 
-    bctx.fillStyle = theme.frame;
-    roundRectPath(bctx, x - 12, y - 12, bw + 24, bh + 24, 18);
-    bctx.fill();
-
-    bctx.strokeStyle = theme.frameBorder;
-    bctx.lineWidth = 2;
-    roundRectPath(bctx, x - 12, y - 12, bw + 24, bh + 24, 18);
-    bctx.stroke();
-
-    roundRectPath(bctx, x - 4, y - 4, bw + 8, bh + 8, 12);
-    bctx.fillStyle = theme.inner;
-    bctx.fill();
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const even = (r + c) % 2 === 0;
-        bctx.fillStyle = even ? theme.cellEven : theme.cellOdd;
-        bctx.fillRect(x + c * cell + 1, y + r * cell + 1, cell - 2, cell - 2);
-        if (even) {
-          bctx.fillStyle = theme.cellShine;
-          bctx.fillRect(x + c * cell + 3, y + r * cell + 3, cell - 6, cell - 6);
-        }
+    if (this.boardImageReady) {
+      this.ctx.save();
+      if (difficulty === 'hard') {
+        this.ctx.filter = 'hue-rotate(58deg) saturate(1.12)';
+      } else if (difficulty === 'monster') {
+        this.ctx.filter = 'hue-rotate(145deg) saturate(1.2) brightness(1.03)';
       }
+      this.ctx.drawImage(this.boardImage, rect.x, rect.y, rect.w, rect.h);
+      this.ctx.restore();
+      return;
     }
+
+    this.ctx.fillStyle = colors.boardFallbackFill;
+    roundRectPath(this.ctx, rect.x, rect.y, rect.w, rect.h, rect.w * 0.07);
+    this.ctx.fill();
+    this.ctx.strokeStyle = colors.border;
+    this.ctx.lineWidth = 2;
+    roundRectPath(this.ctx, rect.x, rect.y, rect.w, rect.h, rect.w * 0.07);
+    this.ctx.stroke();
   }
 
   private cellCenter(row: number, col: number): { x: number; y: number } {
     const { x, y, cell } = this.boardPx;
     return { x: x + col * cell + cell / 2, y: y + row * cell + cell / 2 };
   }
+
+  private boardImageRect(): { x: number; y: number; w: number; h: number } {
+    const { x, y, w, h } = this.boardPx;
+    const scaleX = w / GAME_BOARD_GRID_SIZE;
+    const scaleY = h / GAME_BOARD_GRID_SIZE;
+    return {
+      x: x - GAME_BOARD_GRID_X * scaleX,
+      y: y - GAME_BOARD_GRID_Y * scaleY,
+      w: GAME_BOARD_VIEWBOX * scaleX,
+      h: GAME_BOARD_VIEWBOX * scaleY,
+    };
+  }
+
 
   private cacheFallMovingFrom(): void {
     this.fallMovingFrom = new Set(
@@ -271,7 +395,7 @@ export class CanvasGame {
   }
 
   private posToCell(clientX: number, clientY: number): CellPos | null {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.canvasRect ?? this.canvas.getBoundingClientRect();
     const px = clientX - rect.left;
     const py = clientY - rect.top;
     const { x, y, cell } = this.boardPx;
@@ -289,7 +413,9 @@ export class CanvasGame {
       const cell = this.posToCell(e.clientX, e.clientY);
       if (!cell || !this.board.getCell(cell.row, cell.col)) return;
       e.preventDefault();
+      this.canvasRect = this.canvas.getBoundingClientRect();
       this.canvas.setPointerCapture(e.pointerId);
+      this.swapAnimFrom = 0;
       this.drag = {
         row: cell.row,
         col: cell.col,
@@ -302,37 +428,53 @@ export class CanvasGame {
     });
 
     this.canvas.addEventListener('pointermove', (e) => {
-      if (!this.drag) return;
+      if (!this.drag || this.swipeLock) return;
       e.preventDefault();
       this.drag.curX = e.clientX;
       this.drag.curY = e.clientY;
-      this.markDirty();
 
       const dx = this.drag.curX - this.drag.startX;
       const dy = this.drag.curY - this.drag.startY;
-      if (Math.hypot(dx, dy) >= SWIPE_PX) {
-        const axis: SwipeAxis = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
-        let tRow = this.drag.row;
-        let tCol = this.drag.col;
-        if (axis === 'horizontal') tCol += dx > 0 ? 1 : -1;
-        else tRow += dy > 0 ? 1 : -1;
 
-        if (tRow >= 0 && tRow < ROWS && tCol >= 0 && tCol < COLS) {
-          this.pendingSwipe = {
-            r1: this.drag.row,
-            c1: this.drag.col,
-            r2: tRow,
-            c2: tCol,
-            axis,
-          };
-          this.drag = null;
-          try {
-            this.canvas.releasePointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
+      if (!this.drag.axis && Math.hypot(dx, dy) >= 8) {
+        const axis: SwipeAxis = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+        let nRow = this.drag.row;
+        let nCol = this.drag.col;
+        if (axis === 'horizontal') nCol += dx > 0 ? 1 : -1;
+        else nRow += dy > 0 ? 1 : -1;
+
+        if (nRow >= 0 && nRow < ROWS && nCol >= 0 && nCol < COLS) {
+          this.drag.axis = axis;
+          this.drag.neighborRow = nRow;
+          this.drag.neighborCol = nCol;
         }
       }
+
+      if (Math.hypot(dx, dy) >= SWIPE_PX && this.drag.axis) {
+        const axis = this.drag.axis;
+        const r1 = this.drag.row;
+        const c1 = this.drag.col;
+        const r2 = this.drag.neighborRow!;
+        const c2 = this.drag.neighborCol!;
+        const along = axis === 'horizontal' ? dx : dy;
+        const cell = this.boardPx.cell;
+        this.swapAnimFrom = clamp01((Math.abs(along) * DRAG_FOLLOW) / cell);
+
+        this.swipeLock = true;
+        this.drag = null;
+        this.canvasRect = null;
+        try {
+          this.canvas.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        void this.trySwap(r1, c1, r2, c2, axis).finally(() => {
+          this.swipeLock = false;
+        });
+        return;
+      }
+
+      this.markDirty();
     });
 
     const end = (e: PointerEvent) => {
@@ -344,6 +486,7 @@ export class CanvasGame {
         }
         this.drag = null;
       }
+      this.canvasRect = null;
     };
 
     this.canvas.addEventListener('pointerup', end);
@@ -353,16 +496,9 @@ export class CanvasGame {
   private tick(now: number): void {
     if (this.isInputBlocked()) return;
 
-    if (this.pendingSwipe && this.phase === 'idle') {
-      const s = this.pendingSwipe;
-      this.pendingSwipe = null;
-      void this.trySwap(s.r1, s.c1, s.r2, s.c2, s.axis);
-      return;
-    }
-
     if (this.phase === 'swap') {
       const t = Math.min((now - this.animStart) / this.animDuration, 1);
-      this.swapProgress = easeOutCubic(t);
+      this.swapProgress = this.swapAnimFrom + (1 - this.swapAnimFrom) * easeOutCubic(t);
       if (t >= 1) this.finishAnim();
     } else if (this.phase === 'revert') {
       const t = Math.min((now - this.animStart) / this.animDuration, 1);
@@ -416,20 +552,19 @@ export class CanvasGame {
     c2: number,
     axis: SwipeAxis,
   ): Promise<void> {
-    if (!this.board.isAdjacent(r1, c1, r2, c2)) return;
-
-    const valid = this.board.wouldMatchAfterSwap(r1, c1, r2, c2);
+    if (!this.board.isAdjacent(r1, c1, r2, c2) || this.phase !== 'idle') return;
 
     this.swapPair = { a: { row: r1, col: c1 }, b: { row: r2, col: c2 } };
-    this.swapProgress = 0;
-    await this.startAnim('swap', 95);
+    this.swapProgress = this.swapAnimFrom;
+    await this.startAnim('swap', 80);
 
+    const valid = this.board.wouldMatchAfterSwap(r1, c1, r2, c2);
     if (!valid) {
-      await this.startAnim('revert', 90);
+      await this.startAnim('revert', 75);
       return;
     }
 
-    this.board.playerSwap(r1, c1, r2, c2, axis);
+    this.board.playerSwap(r1, c1, r2, c2, axis, { skipValidate: true });
     this.swapPair = null;
     this.board.resetCombo();
 
@@ -535,8 +670,6 @@ export class CanvasGame {
     const totalStars = countTotalStars(this.levelProgress);
     const rank = getRankFromStars(totalStars).name;
     const score = this.board.getScore();
-    const target = this.getTargetScore();
-    const isMonster = this.levelConfig.difficulty === 'monster';
 
     this.hud.update({
       score,
@@ -545,20 +678,32 @@ export class CanvasGame {
       level: this.level,
       lives: this.lives.getLives(),
       maxLives: MAX_LIVES,
+      livesRegenMs: this.lives.getNextRegenMs(),
       rank,
-      avatar: getAvatarInitials(),
-      targetScore: target,
+      targetTask: this.levelTarget.taskType,
+      targetScore: this.levelTarget.scoreTarget,
+      objectives: this.levelTarget.collectObjectives,
+      collected: this.board.getCollectedCounts(),
       difficultyLabel: this.stageTheme.label,
       difficultyClass: this.stageTheme.hudClass,
-      isBossFight: isMonster,
-      bossName: 'Nexus Beast',
-      bossHp: isMonster ? Math.max(0, target - score) : undefined,
-      bossMaxHp: isMonster ? target : undefined,
+      difficultyTag: getDifficultyTag(this.levelConfig.difficulty),
     });
   }
 
   private getTargetScore(): number {
     return this.levelConfig.targetScore;
+  }
+
+  private restartLevel(): void {
+    if (!this.visible || this.levelEnded) return;
+    if (this.levelCard.isVisible() || this.levelWelcome.isVisible() || this.quitModal.isVisible()) {
+      return;
+    }
+    if (!this.lives.canPlay()) {
+      this.showNoLivesToast();
+      return;
+    }
+    this.startLevel(this.level);
   }
 
   private requestQuit(): void {
@@ -590,8 +735,13 @@ export class CanvasGame {
     const target = this.getTargetScore();
     const score = this.board.getScore();
     const movesLeft = this.board.getMoves();
+    const won = isLevelTargetComplete(
+      this.levelTarget,
+      score,
+      this.board.getCollectedCounts(),
+    );
 
-    if (score >= target) {
+    if (won) {
       this.levelEnded = true;
       const stars = calcStars(score, target, movesLeft);
       this.levelProgress.recordWin(this.level, stars);
@@ -630,7 +780,7 @@ export class CanvasGame {
         },
         onReplay: () => {
           if (!this.lives.canPlay()) {
-            this.hud.showToast('No lives left!', 3000);
+            this.showNoLivesToast();
             return;
           }
           this.startLevel(this.level);
@@ -645,19 +795,27 @@ export class CanvasGame {
   private startLevel(level: number): void {
     this.level = level;
     this.levelConfig = buildLevelConfig(level);
+    this.levelTarget = buildLevelTarget(
+      level,
+      this.levelConfig.difficulty,
+      this.levelConfig.targetScore,
+    );
     this.stageTheme = getStageTheme(this.levelConfig.difficulty);
+    applyDifficultyThemeClass(this.stageTheme.hudClass);
     this.peakCombo = 0;
     this.levelEnded = false;
     this.board = new SimpleBoard(ROWS, COLS, this.levelConfig.moves);
     this.phase = 'idle';
+    this.swipeLock = false;
+    this.invalidateBoardLayer();
     this.quitModal.hide();
     this.levelCard.hide();
 
-    const w = Math.min(window.innerWidth, 420);
-    const h = Math.min(window.innerHeight, w * (16 / 9));
-    this.cacheBackground(w, h);
-
     this.updateHud();
+    this.resize();
+    requestAnimationFrame(() => {
+      if (this.visible) this.resize();
+    });
     this.markDirty();
 
     if (!this.tutorialShown) {
@@ -685,9 +843,14 @@ export class CanvasGame {
     this.ctx.save();
     this.ctx.translate(camX, camY);
 
-    if (this.bgCanvas) {
-      this.ctx.drawImage(this.bgCanvas, 0, 0, w, h);
+    if (this.boardLayer && this.boardLayerKey === this.boardLayerCacheKey(w, h)) {
+      this.ctx.drawImage(this.boardLayer, 0, 0, w, h);
+    } else {
+      this.rebuildBoardLayer(w, h);
+      if (this.boardLayer) this.ctx.drawImage(this.boardLayer, 0, 0, w, h);
     }
+
+    this.drawBoardFrame();
 
     const shakeMap = new Map(this.animCells.map((a) => [`${a.row},${a.col}`, a]));
     const dragging = this.drag && this.phase === 'idle';
@@ -776,12 +939,25 @@ export class CanvasGame {
         ox = (to.x - from.x) * t;
         oy = (to.y - from.y) * t;
       }
-    } else if (dragging && this.drag!.row === r && this.drag!.col === c) {
-      const ddx = this.drag!.curX - this.drag!.startX;
-      const ddy = this.drag!.curY - this.drag!.startY;
+    } else if (dragging && this.drag) {
+      const d = this.drag;
       const cap = cell * 0.48;
-      ox = Math.max(-cap, Math.min(cap, ddx * 0.55));
-      oy = Math.max(-cap, Math.min(cap, ddy * 0.55));
+      let ddx = d.curX - d.startX;
+      let ddy = d.curY - d.startY;
+
+      if (d.axis === 'horizontal') ddy = 0;
+      else if (d.axis === 'vertical') ddx = 0;
+
+      const dragOx = Math.max(-cap, Math.min(cap, ddx * DRAG_FOLLOW));
+      const dragOy = Math.max(-cap, Math.min(cap, ddy * DRAG_FOLLOW));
+
+      if (d.row === r && d.col === c) {
+        ox = dragOx;
+        oy = dragOy;
+      } else if (d.neighborRow === r && d.neighborCol === c) {
+        ox = -dragOx;
+        oy = -dragOy;
+      }
     }
 
     drawCandy(this.ctx, center.x + ox, center.y + oy, cell, candy.category, {

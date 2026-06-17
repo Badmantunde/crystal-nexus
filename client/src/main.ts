@@ -14,7 +14,7 @@ try {
   }
 } catch (err) {
   console.error('Failed to start CRYSTAL NEXUS:', err);
-  container.innerHTML = `<div style="color:#fff;padding:24px;font-family:sans-serif">
+  container.innerHTML = `<div style="color:#fff;padding:24px;font-family:Inter,system-ui,sans-serif">
     <h2>Game failed to load</h2>
     <pre>${err instanceof Error ? err.message : String(err)}</pre>
   </div>`;

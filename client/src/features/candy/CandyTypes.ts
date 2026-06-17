@@ -1,4 +1,5 @@
-import { CrystalCategory, MATCHABLE_CATEGORIES } from '@crystal-nexus/shared';
+import { CrystalCategory } from '@crystal-nexus/shared';
+import { BOARD_FRUIT_CATEGORIES } from './fruitAssets';
 
 export type CandyShape = 'circle' | 'square' | 'diamond' | 'triangle' | 'hexagon' | 'star';
 
@@ -63,7 +64,7 @@ export const CANDY_STYLES: Record<string, CandyStyle> = {
 };
 
 export function randomCandyType(): CrystalCategory {
-  return MATCHABLE_CATEGORIES[Math.floor(Math.random() * MATCHABLE_CATEGORIES.length)];
+  return BOARD_FRUIT_CATEGORIES[Math.floor(Math.random() * BOARD_FRUIT_CATEGORIES.length)];
 }
 
 export function getCandyStyle(category: CrystalCategory): CandyStyle {
