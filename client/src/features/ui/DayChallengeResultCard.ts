@@ -1,9 +1,12 @@
 import { STAR_ACTIVE_URL, STAR_INACTIVE_URL } from './UiChrome';
 
 export interface DayChallengeStats {
+  modeLabel: string;
   rushCoins: number;
-  rushTarget: number;
+  rushTarget?: number;
   score: number;
+  scoreTarget?: number;
+  bossHpLeft?: number;
   movesLeft: number;
   maxCombo: number;
   won: boolean;
@@ -34,7 +37,7 @@ export class DayChallengeResultCard {
         <div class="cn-card-shell-glow" aria-hidden="true"></div>
         <div class="cn-card day-result-card" role="dialog" aria-modal="true">
           <div class="cn-card-shine"></div>
-          <span class="cn-badge cn-badge--day" id="dc-result-badge">DAY CHALLENGE</span>
+          <span class="cn-badge cn-badge--day" id="dc-result-badge">DAILY CHALLENGE</span>
           <h2 class="day-result-title" id="dc-result-title">Coin Rush</h2>
           <p class="day-result-stars-label">Performance</p>
           <div class="complete-stars" id="dc-result-stars" aria-label="Stars earned">
@@ -43,7 +46,7 @@ export class DayChallengeResultCard {
             <img class="star-icon" data-i="3" src="${STAR_INACTIVE_URL}" width="32" height="32" alt="" />
           </div>
           <div class="complete-stats">
-            <div class="cn-stat-pill">
+            <div class="cn-stat-pill" id="dc-rush-wrap">
               <span class="cn-stat-pill-label">Rush Coins</span>
               <span class="cn-stat-pill-value" id="dc-rush">0/0</span>
             </div>
@@ -96,11 +99,25 @@ export class DayChallengeResultCard {
     const title = this.backdrop.querySelector('#dc-result-title')!;
 
     badge.textContent = stats.won ? 'CHALLENGE CLEAR' : 'OUT OF MOVES';
-    title.textContent = 'Coin Rush';
+    title.textContent = stats.modeLabel;
 
-    this.backdrop.querySelector('#dc-rush')!.textContent =
-      `${stats.rushCoins}/${stats.rushTarget}`;
-    this.backdrop.querySelector('#dc-score')!.textContent = stats.score.toLocaleString();
+    const rushWrap = this.backdrop.querySelector('#dc-rush-wrap') as HTMLElement;
+    if (stats.rushTarget != null) {
+      rushWrap.hidden = false;
+      this.backdrop.querySelector('#dc-rush')!.textContent =
+        `${stats.rushCoins}/${stats.rushTarget}`;
+    } else {
+      rushWrap.hidden = true;
+    }
+
+    const scoreEl = this.backdrop.querySelector('#dc-score')!;
+    if (stats.scoreTarget != null && stats.rushTarget == null) {
+      scoreEl.textContent = `${stats.score.toLocaleString()}/${stats.scoreTarget.toLocaleString()}`;
+    } else if (stats.bossHpLeft != null) {
+      scoreEl.textContent = stats.bossHpLeft <= 0 ? 'Defeated!' : `${stats.bossHpLeft} HP left`;
+    } else {
+      scoreEl.textContent = stats.score.toLocaleString();
+    }
     this.backdrop.querySelector('#dc-moves')!.textContent = String(stats.movesLeft);
     this.backdrop.querySelector('#dc-combo')!.textContent = `×${stats.maxCombo}`;
 
@@ -121,7 +138,7 @@ export class DayChallengeResultCard {
       streakWrap.hidden = true;
     }
 
-    const stars = calcDayStars(stats.rushCoins, stats.rushTarget, stats.movesLeft, stats.won);
+    const stars = calcDayStars(stats);
     this.backdrop.querySelectorAll<HTMLImageElement>('.star-icon').forEach((el) => {
       const n = Number(el.dataset.i);
       const earned = stats.won && n <= stars;
@@ -150,14 +167,19 @@ export class DayChallengeResultCard {
   }
 }
 
-function calcDayStars(
-  rushCoins: number,
-  target: number,
-  movesLeft: number,
-  won: boolean,
-): 1 | 2 | 3 {
-  if (!won) return 1;
-  if (rushCoins >= target * 1.3 && movesLeft >= 6) return 3;
-  if (rushCoins >= target * 1.1 || movesLeft >= 4) return 2;
+function calcDayStars(stats: DayChallengeStats): 1 | 2 | 3 {
+  if (!stats.won) return 1;
+  if (stats.rushTarget != null) {
+    if (stats.rushCoins >= stats.rushTarget * 1.3 && stats.movesLeft >= 6) return 3;
+    if (stats.rushCoins >= stats.rushTarget * 1.1 || stats.movesLeft >= 4) return 2;
+    return 1;
+  }
+  if (stats.scoreTarget != null) {
+    if (stats.score >= stats.scoreTarget * 1.25 && stats.movesLeft >= 5) return 3;
+    if (stats.score >= stats.scoreTarget * 1.1 || stats.movesLeft >= 3) return 2;
+    return 1;
+  }
+  if (stats.movesLeft >= 5) return 3;
+  if (stats.movesLeft >= 2) return 2;
   return 1;
 }

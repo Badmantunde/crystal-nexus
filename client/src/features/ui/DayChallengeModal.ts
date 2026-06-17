@@ -30,7 +30,7 @@ export class DayChallengeModal {
         <div class="cn-card-shell-glow" aria-hidden="true"></div>
         <div class="cn-card day-challenge-card" role="dialog" aria-modal="true" aria-labelledby="day-challenge-title">
           <div class="cn-card-shine"></div>
-          <span class="cn-badge cn-badge--day">DAY CHALLENGE</span>
+          <span class="cn-badge cn-badge--day">DAILY CHALLENGE</span>
           <h2 class="day-challenge-title" id="day-challenge-title">Today's Special</h2>
           <p class="day-challenge-body" id="day-challenge-body"></p>
           <ul class="day-challenge-perks" id="day-challenge-perks"></ul>
@@ -93,14 +93,20 @@ export class DayChallengeModal {
     this.backdrop.querySelector('#day-challenge-title')!.textContent = config.modeLabel;
 
     const status = record.completed ? 'Cleared today' : 'Not cleared yet';
-    this.bodyEl.textContent =
-      `Collect ${config.rushTarget} rush coins in ${config.moves} moves on today's seeded board. ` +
-      `${status}. Best: ${record.bestRushCoins} coins.`;
+    const goal =
+      config.mode === 'coin_rush'
+        ? `Collect ${config.rushTarget} rush coins in ${config.moves} moves.`
+        : config.mode === 'boss_brawl'
+          ? `Deplete ${config.bossHp} boss HP in ${config.moves} moves.`
+          : `Score ${config.scoreTarget?.toLocaleString()} in ${config.moves} moves.`;
+
+    this.bodyEl.textContent = `${goal} ${status} Best score: ${record.bestScore.toLocaleString()}.`;
 
     this.perksEl.innerHTML = `
-      <li>Same puzzle for every player today</li>
+      <li>${config.modeDescription}</li>
+      <li>Rotates weekly — Mon/Thu Rush · Tue/Fri Limit · Wed/Sat Frenzy · Sun Boss</li>
       <li>30 coin reward · +15 beat best · +10 combo bonus</li>
-      <li>No lives spent · streak ${streak} day${streak === 1 ? '' : 's'}</li>
+      <li>Streak ${streak} day${streak === 1 ? '' : 's'}</li>
     `;
 
     this.playHintEl.textContent = entry.reason;

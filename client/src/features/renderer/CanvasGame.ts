@@ -8,6 +8,9 @@ import {
 import { drawCandy } from './CandyDrawer';
 import { preloadFruitSprites } from '../candy/fruitAssets';
 import { drawLineBlast, blastCellVanish, blastScreenFlash, blastShakeIntensity } from './BlastDrawer';
+import { drawTileModifiers } from './ModifierDrawer';
+import { getModifiersForLevel } from '../match3/BoardModifiers';
+import { consumeArmedBooster } from '../player/Boosters';
 import { HUD } from '../ui/HUD';
 import { PraiseOverlay } from '../ui/PraiseOverlay';
 import {
@@ -18,7 +21,7 @@ import {
 } from '../ui/PraiseSystem';
 import { LevelCompleteCard, calcStars } from '../ui/LevelCompleteCard';
 import { DayChallengeResultCard } from '../ui/DayChallengeResultCard';
-import { coinsForStars, grantCoins } from '../player/Economy';
+import { coinsForStars, grantCoins, purchaseContinue, purchaseSkipStage } from '../player/Economy';
 import {
   buildDayChallengeConfig,
   consumeDayChallengeEntry,
@@ -31,7 +34,6 @@ import { QuitConfirmModal } from '../ui/QuitConfirmModal';
 import { LivesManager, MAX_LIVES, formatRegenCountdown } from '../player/Lives';
 import { LevelProgress } from '../player/LevelProgress';
 import {
-  buildLevelConfig,
   applyDifficultyThemeClass,
   clearDifficultyThemeClass,
   getDifficultyTag,
@@ -42,10 +44,12 @@ import {
 } from '../player/LevelDifficulty';
 import { buildMapNavState } from '../player/playerNavState';
 import {
-  buildLevelTarget,
   isLevelTargetComplete,
   type LevelTarget,
 } from '../player/LevelObjectives';
+import { buildLevelConfig, buildScriptedLevelTarget, getLevelTagline } from '../player/LevelScript';
+import { consumePracticeShield, hasPracticeShield } from '../player/PracticeShield';
+import { ContinueModal } from '../ui/ContinueModal';
 
 const ROWS = 8;
 const COLS = 8;
@@ -91,14 +95,17 @@ export class CanvasGame {
   private dayResultCard: DayChallengeResultCard;
   private levelWelcome: LevelWelcomeCard;
   private quitModal: QuitConfirmModal;
+  private continueModal: ContinueModal;
   private level = 1;
   private levelConfig: LevelConfig = buildLevelConfig(1);
-  private levelTarget: LevelTarget = buildLevelTarget(1, 'tutorial', 400);
+  private levelTarget: LevelTarget = buildScriptedLevelTarget(1, buildLevelConfig(1));
   private stageTheme: StageTheme = getStageTheme('easy');
   private peakCombo = 0;
   private lastCoinsEarned = 0;
   private gameMode: GameMode = 'story';
   private dayConfig: DayChallengeConfig | null = null;
+  private continueUsedThisSession = false;
+  private dayBossHp = 0;
   private levelEnded = false;
   private phase: Phase = 'idle';
   private drag: DragState | null = null;
@@ -153,6 +160,7 @@ export class CanvasGame {
     this.dayResultCard = new DayChallengeResultCard();
     this.levelWelcome = new LevelWelcomeCard();
     this.quitModal = new QuitConfirmModal();
+    this.continueModal = new ContinueModal();
     this.board = new SimpleBoard(ROWS, COLS, 30);
 
     this.hud.setOnQuit(() => this.requestQuit());
@@ -207,6 +215,7 @@ export class CanvasGame {
     this.levelCard.hide();
     this.dayResultCard.hide();
     this.quitModal.hide();
+    this.continueModal.hide();
     this.phase = 'idle';
   }
 
@@ -637,6 +646,7 @@ export class CanvasGame {
         for (const blast of matchBlasts) {
           await this.playBlastAnimation(blast);
           this.board.commitSpecialBlast(blast);
+          this.dealBossDamage(blast.cells.length);
           this.activeBlast = null;
           this.fallMoves = this.board.computeFallMoves();
           this.cacheFallMovingFrom();
@@ -668,6 +678,7 @@ export class CanvasGame {
       await this.startAnim('vanish', 180);
 
       this.board.clearWaveCells(wave);
+      this.dealBossDamage(wave.cells.length);
       this.fallMoves = this.board.computeFallMoves();
       this.cacheFallMovingFrom();
       this.fallProgress = 0;
@@ -699,18 +710,46 @@ export class CanvasGame {
     });
 
     if (this.gameMode === 'day' && this.dayConfig) {
-      this.hud.update({
-        nav,
-        score: this.board.getScore(),
-        moves: this.board.getMoves(),
-        level: nav.level,
-        maxLives: MAX_LIVES,
-        targetTask: 'rush',
-        rushCoins: this.board.getRushCoins(),
-        rushTarget: this.dayConfig.rushTarget,
-        difficultyClass: 'hud-theme-easy',
-        difficultyTag: 'RUSH',
-      });
+      const cfg = this.dayConfig;
+      if (cfg.mode === 'coin_rush') {
+        this.hud.update({
+          nav,
+          score: this.board.getScore(),
+          moves: this.board.getMoves(),
+          level: nav.level,
+          maxLives: MAX_LIVES,
+          targetTask: 'rush',
+          rushCoins: this.board.getRushCoins(),
+          rushTarget: cfg.rushTarget ?? 100,
+          difficultyClass: 'hud-theme-easy',
+          difficultyTag: 'RUSH',
+        });
+      } else if (cfg.mode === 'boss_brawl') {
+        this.hud.update({
+          nav,
+          score: this.board.getScore(),
+          moves: this.board.getMoves(),
+          level: nav.level,
+          maxLives: MAX_LIVES,
+          targetTask: 'boss',
+          bossHp: this.dayBossHp,
+          bossHpMax: cfg.bossHp ?? 800,
+          difficultyClass: 'diff-monster',
+          difficultyTag: 'BOSS',
+        });
+      } else {
+        this.hud.update({
+          nav,
+          score: this.board.getScore(),
+          moves: this.board.getMoves(),
+          level: nav.level,
+          maxLives: MAX_LIVES,
+          targetTask: 'score',
+          targetScore: cfg.scoreTarget ?? 1500,
+          difficultyClass: 'hud-theme-easy',
+          difficultyTag: cfg.mode === 'fruit_frenzy' ? 'FRENZY' : 'LIMIT',
+        });
+      }
       return;
     }
 
@@ -738,6 +777,7 @@ export class CanvasGame {
     if (
       this.levelCard.isVisible() ||
       this.dayResultCard.isVisible() ||
+      this.continueModal.isVisible() ||
       this.levelWelcome.isVisible() ||
       this.quitModal.isVisible()
     ) {
@@ -762,12 +802,22 @@ export class CanvasGame {
   private quitToMap(): void {
     this.levelEnded = true;
     if (this.gameMode === 'story') {
-      this.lives.loseLife();
+      this.maybeLoseLife();
     }
     this.levelCard.hide();
     this.dayResultCard.hide();
     this.quitModal.hide();
+    this.continueModal.hide();
     this.onReturnToMap?.();
+  }
+
+  private maybeLoseLife(): void {
+    if (hasPracticeShield(this.level)) {
+      consumePracticeShield(this.level);
+      this.hud.showToast('Practice shield — no life lost', 2800);
+      return;
+    }
+    this.lives.loseLife();
   }
 
   private isInputBlocked(): boolean {
@@ -776,13 +826,16 @@ export class CanvasGame {
       this.levelEnded ||
       this.levelCard.isVisible() ||
       this.dayResultCard.isVisible() ||
+      this.continueModal.isVisible() ||
       this.levelWelcome.isVisible() ||
       this.quitModal.isVisible()
     );
   }
 
   private checkWin(): void {
-    if (this.levelCard.isVisible() || this.dayResultCard.isVisible()) return;
+    if (this.levelCard.isVisible() || this.dayResultCard.isVisible() || this.continueModal.isVisible()) {
+      return;
+    }
 
     if (this.gameMode === 'day' && this.dayConfig) {
       this.checkDayChallengeWin();
@@ -806,23 +859,81 @@ export class CanvasGame {
       this.praise.show({ text: 'Level Complete!', tier: 'legendary', sub: `Level ${this.level}` }, 1800);
       setTimeout(() => this.showLevelEndCard(true), 600);
     } else if (movesLeft <= 0) {
+      if (this.canOfferContinue()) {
+        this.showContinuePrompt();
+        return;
+      }
       this.levelEnded = true;
-      this.lives.loseLife();
-      this.updateHud();
-      setTimeout(() => this.showLevelEndCard(false), 400);
+      this.applyLevelFail();
+    }
+  }
+
+  private canOfferContinue(): boolean {
+    return this.gameMode === 'story' && !this.continueUsedThisSession;
+  }
+
+  private showContinuePrompt(): void {
+    this.continueModal.show({
+      onContinue: () => {
+        const result = purchaseContinue();
+        if (!result.ok) {
+          this.hud.showToast(result.message, 3500);
+          this.levelEnded = true;
+          this.applyLevelFail();
+          return;
+        }
+        this.board.addMoves(5);
+        this.continueUsedThisSession = true;
+        this.updateHud();
+        this.hud.showToast(result.message, 2200);
+      },
+      onGiveUp: () => {
+        this.levelEnded = true;
+        this.applyLevelFail();
+      },
+    });
+  }
+
+  private applyLevelFail(): void {
+    this.maybeLoseLife();
+    this.updateHud();
+    setTimeout(() => this.showLevelEndCard(false), 400);
+  }
+
+  private dealBossDamage(cellsCleared: number): void {
+    if (this.gameMode !== 'day' || this.dayConfig?.mode !== 'boss_brawl') return;
+    this.dayBossHp = Math.max(0, this.dayBossHp - cellsCleared * 18);
+    if (this.dayBossHp <= 0) {
+      this.checkDayChallengeWin();
     }
   }
 
   private checkDayChallengeWin(): void {
     if (!this.dayConfig) return;
 
-    const rushCoins = this.board.getRushCoins();
     const movesLeft = this.board.getMoves();
-    const won = rushCoins >= this.dayConfig.rushTarget;
+    const score = this.board.getScore();
+    let won = false;
+
+    switch (this.dayConfig.mode) {
+      case 'coin_rush':
+        won = this.board.getRushCoins() >= (this.dayConfig.rushTarget ?? 100);
+        break;
+      case 'move_limit':
+      case 'fruit_frenzy':
+        won = score >= (this.dayConfig.scoreTarget ?? 1500);
+        break;
+      case 'boss_brawl':
+        won = this.dayBossHp <= 0;
+        break;
+    }
 
     if (won) {
       this.levelEnded = true;
-      this.praise.show({ text: 'Challenge Clear!', tier: 'legendary', sub: 'Coin Rush' }, 1800);
+      this.praise.show(
+        { text: 'Challenge Clear!', tier: 'legendary', sub: this.dayConfig.modeLabel },
+        1800,
+      );
       setTimeout(() => this.showDayEndCard(true), 600);
     } else if (movesLeft <= 0) {
       this.levelEnded = true;
@@ -835,6 +946,7 @@ export class CanvasGame {
 
     const rewards = recordDayChallengeResult({
       dateKey: this.dayConfig.dateKey,
+      mode: this.dayConfig.mode,
       won,
       rushCoins: this.board.getRushCoins(),
       score: this.board.getScore(),
@@ -843,9 +955,12 @@ export class CanvasGame {
 
     this.dayResultCard.show(
       {
+        modeLabel: this.dayConfig.modeLabel,
         rushCoins: this.board.getRushCoins(),
         rushTarget: this.dayConfig.rushTarget,
         score: this.board.getScore(),
+        scoreTarget: this.dayConfig.scoreTarget,
+        bossHpLeft: this.dayBossHp,
         movesLeft: this.board.getMoves(),
         maxCombo: this.peakCombo,
         won,
@@ -906,6 +1021,15 @@ export class CanvasGame {
         onMap: () => {
           this.onReturnToMap?.();
         },
+        showSkip: !won && this.levelProgress.canSkipLevel(this.level),
+        onSkip: () => {
+          const result = purchaseSkipStage(this.levelProgress, this.level);
+          if (!result.ok) {
+            this.hud.showToast(result.message, 3500);
+            return;
+          }
+          this.onReturnToMap?.();
+        },
       },
     );
   }
@@ -916,10 +1040,15 @@ export class CanvasGame {
     this.level = 0;
     this.peakCombo = 0;
     this.levelEnded = false;
-    this.board = new SimpleBoard(ROWS, COLS, this.dayConfig.moves, {
+    this.dayBossHp = this.dayConfig.bossHp ?? 0;
+
+    const boardOpts: import('../match3/SimpleBoard').SimpleBoardOptions = {
       seed: this.dayConfig.seed,
-      coinRush: true,
-    });
+      coinRush: this.dayConfig.mode === 'coin_rush',
+      frenzyCategory: this.dayConfig.frenzyCategory,
+    };
+
+    this.board = new SimpleBoard(ROWS, COLS, this.dayConfig.moves, boardOpts);
     this.phase = 'idle';
     this.swipeLock = false;
     this.stageTheme = getStageTheme('easy');
@@ -935,31 +1064,55 @@ export class CanvasGame {
       if (this.visible) this.resize();
     });
     this.markDirty();
-    this.hud.showToast(
-      `Coin Rush — collect ${this.dayConfig.rushTarget} coins in ${this.dayConfig.moves} moves`,
-      4200,
-    );
+    const cfg = this.dayConfig;
+    const toast =
+      cfg.mode === 'coin_rush'
+        ? `Coin Rush — collect ${cfg.rushTarget} coins`
+        : cfg.mode === 'boss_brawl'
+          ? `Boss Brawl — deplete ${cfg.bossHp} HP`
+          : cfg.mode === 'fruit_frenzy'
+            ? `Fruit Frenzy — score ${cfg.scoreTarget?.toLocaleString()} (3× fruit bonus)`
+            : `Move Limit — score ${cfg.scoreTarget?.toLocaleString()} in ${cfg.moves} moves`;
+    this.hud.showToast(toast, 4200);
+  }
+
+  private applyArmedBooster(): void {
+    const booster = consumeArmedBooster();
+    if (booster !== 'row_bomb') return;
+
+    const candidates: CellPos[] = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (this.board.getCell(r, c) && !this.board.isCrate(r, c)) {
+          candidates.push({ row: r, col: c });
+        }
+      }
+    }
+    if (candidates.length === 0) return;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]!;
+    this.board.setSpecial(pick.row, pick.col, 'row');
+    this.hud.showToast('Row bomb booster activated!', 2800);
   }
 
   private startLevel(level: number): void {
     this.gameMode = 'story';
     this.dayConfig = null;
+    this.continueUsedThisSession = false;
     this.level = level;
     this.levelConfig = buildLevelConfig(level);
-    this.levelTarget = buildLevelTarget(
-      level,
-      this.levelConfig.tier,
-      this.levelConfig.targetScore,
-    );
+    this.levelTarget = buildScriptedLevelTarget(level, this.levelConfig);
     this.stageTheme = getStageTheme(this.levelConfig.difficulty);
     applyDifficultyThemeClass(this.stageTheme.hudClass);
     this.peakCombo = 0;
     this.levelEnded = false;
-    this.board = new SimpleBoard(ROWS, COLS, this.levelConfig.moves);
+    const modifiers = getModifiersForLevel(level, ROWS, COLS);
+    this.board = new SimpleBoard(ROWS, COLS, this.levelConfig.moves, { modifiers });
+    this.applyArmedBooster();
     this.phase = 'idle';
     this.swipeLock = false;
     this.invalidateBoardLayer();
     this.quitModal.hide();
+    this.continueModal.hide();
     this.levelCard.hide();
 
     this.updateHud();
@@ -969,11 +1122,22 @@ export class CanvasGame {
     });
     this.markDirty();
 
-    if (!this.tutorialShown) {
+    const tagline = getLevelTagline(level);
+    if (tagline) {
+      this.hud.showToast(tagline, 3800);
+    } else if (!this.tutorialShown) {
       this.tutorialShown = true;
       this.hud.showToast('Match 4 = row/col bomb · Match 5 = color bomb', 4500);
+    } else if (modifiers && (modifiers.jelly.length > 0 || modifiers.crates.length > 0)) {
+      this.hud.showToast('Clear jelly twice · break crates with adjacent matches', 3600);
+    } else if (hasPracticeShield(level)) {
+      this.hud.showToast('Practice shield — first try is free', 3200);
     } else if (this.levelConfig.difficulty !== 'easy') {
-      this.hud.showToast(`${this.stageTheme.label} — reach ${this.levelConfig.targetScore.toLocaleString()} pts`, 3200);
+      const goal =
+        this.levelTarget.taskType === 'collect'
+          ? 'collect the fruit targets'
+          : `reach ${this.levelConfig.targetScore.toLocaleString()} pts`;
+      this.hud.showToast(`${this.stageTheme.label} — ${goal}`, 3200);
     }
   }
 
@@ -1016,6 +1180,10 @@ export class CanvasGame {
           this.drawBoardCandy(r, c, cell, shakeMap, blast, blastCellSet, dragging);
         }
       }
+    }
+
+    if (this.board.hasModifiers()) {
+      drawTileModifiers(this.ctx, this.board, cell, this.boardPx.x, this.boardPx.y);
     }
 
     if (blast && this.blastProgress > 0) {

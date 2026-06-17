@@ -27,6 +27,8 @@ export interface HUDState {
   collected?: Readonly<Partial<Record<CrystalCategory, number>>>;
   rushCoins?: number;
   rushTarget?: number;
+  bossHp?: number;
+  bossHpMax?: number;
   message?: string;
 }
 
@@ -196,12 +198,16 @@ export class HUD {
     this.movesEl.textContent = String(state.moves);
 
     const task = state.targetTask ?? 'score';
-    this.targetCardEl.classList.toggle('hud-target-card--score', task === 'score' || task === 'rush');
+    this.targetCardEl.classList.toggle('hud-target-card--score', task === 'score' || task === 'rush' || task === 'boss');
     this.targetCardEl.classList.toggle('hud-target-card--collect', task === 'collect');
     this.targetCardEl.classList.toggle('hud-target-card--rush', task === 'rush');
+    this.targetCardEl.classList.toggle('hud-target-card--boss', task === 'boss');
 
     const scoreLabel = this.targetCardEl.querySelector('.hud-card-label');
-    if (scoreLabel) scoreLabel.textContent = task === 'rush' ? 'Coin Rush' : 'Target';
+    if (scoreLabel) {
+      scoreLabel.textContent =
+        task === 'rush' ? 'Coin Rush' : task === 'boss' ? 'Boss HP' : 'Target';
+    }
 
     if (task === 'score') {
       const target = state.targetScore ?? 1;
@@ -214,6 +220,12 @@ export class HUD {
       const rush = state.rushCoins ?? 0;
       this.targetScoreValEl.textContent = `${rush}/${target}`;
       const pct = Math.min(100, (rush / target) * 100);
+      this.targetProgressFillEl.style.width = `${pct}%`;
+    } else if (task === 'boss') {
+      const max = state.bossHpMax ?? 1;
+      const hp = state.bossHp ?? 0;
+      this.targetScoreValEl.textContent = `${hp}/${max}`;
+      const pct = Math.min(100, ((max - hp) / max) * 100);
       this.targetProgressFillEl.style.width = `${pct}%`;
     } else {
       const objectives = state.objectives ?? [];

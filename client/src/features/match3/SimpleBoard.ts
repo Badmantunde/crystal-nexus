@@ -2,6 +2,7 @@ import type { CrystalCategory } from '@crystal-nexus/shared';
 import { randomCandyType, randomCandyTypeFromRng } from '../candy/CandyTypes';
 import { mulberry32 } from '../player/DayChallenge';
 import { makeCandy, isSpecial, cellCategory, type CandyCell, type SpecialType } from '../candy/CandyCell';
+import type { BoardModifierLayout } from './BoardModifiers';
 
 export interface CellPos {
   row: number;
@@ -47,6 +48,9 @@ export interface FallMove {
 export interface SimpleBoardOptions {
   seed?: number;
   coinRush?: boolean;
+  modifiers?: BoardModifierLayout | null;
+  /** Fruit Frenzy day mode — 3× score for this category. */
+  frenzyCategory?: import('@crystal-nexus/shared').CrystalCategory;
 }
 
 export class SimpleBoard {
@@ -58,7 +62,10 @@ export class SimpleBoard {
   private _combo = 0;
   private _rushCoins = 0;
   private coinRush: boolean;
+  private frenzyCategory: import('@crystal-nexus/shared').CrystalCategory | null;
   private rng: () => number;
+  private jellyHits: number[][];
+  private crateMask: boolean[][];
   private collected: Partial<Record<CrystalCategory, number>> = {};
   private lastPivot: CellPos | null = null;
   private lastSwipeAxis: SwipeAxis = 'horizontal';
@@ -68,10 +75,54 @@ export class SimpleBoard {
     this.cols = cols;
     this._moves = moves;
     this.coinRush = options.coinRush ?? false;
+    this.frenzyCategory = options.frenzyCategory ?? null;
     this.rng = options.seed != null ? mulberry32(options.seed) : Math.random;
+    this.jellyHits = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
+    this.crateMask = Array.from({ length: rows }, () => Array.from({ length: cols }, () => false));
     this.grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
     this.fill();
     while (this.findMatches().length > 0) this.refillRandom();
+    if (options.modifiers) this.applyModifiers(options.modifiers);
+  }
+
+  isCrate(row: number, col: number): boolean {
+    return this.crateMask[row]?.[col] ?? false;
+  }
+
+  getJellyHits(row: number, col: number): number {
+    return this.jellyHits[row]?.[col] ?? 0;
+  }
+
+  hasModifiers(): boolean {
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.crateMask[r][c] || this.jellyHits[r][c] > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  setSpecial(row: number, col: number, special: SpecialType): void {
+    const cell = this.getCell(row, col);
+    if (!cell || this.isCrate(row, col)) return;
+    this.grid[row][col] = makeCandy(cell.category, special);
+  }
+
+  private applyModifiers(layout: BoardModifierLayout): void {
+    for (const { row, col } of layout.crates) {
+      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
+      this.crateMask[row][col] = true;
+      this.grid[row][col] = null;
+    }
+    for (const { row, col } of layout.jelly) {
+      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
+      if (this.crateMask[row][col]) continue;
+      this.jellyHits[row][col] = 2;
+    }
+  }
+
+  private isBlockedCell(row: number, col: number): boolean {
+    return this.isCrate(row, col);
   }
 
   getCell(row: number, col: number): CandyCell | null {
@@ -89,6 +140,10 @@ export class SimpleBoard {
 
   getMoves(): number {
     return this._moves;
+  }
+
+  addMoves(count: number): void {
+    this._moves += count;
   }
 
   getCombo(): number {
@@ -109,11 +164,46 @@ export class SimpleBoard {
     }
     for (const { row, col } of cells) {
       const cat = cellCategory(this.grid[row][col]);
-      if (cat) this.collected[cat] = (this.collected[cat] ?? 0) + 1;
+      if (!cat) continue;
+      let weight = 1;
+      if (this.frenzyCategory && cat === this.frenzyCategory) weight = 3;
+      this.collected[cat] = (this.collected[cat] ?? 0) + weight;
     }
   }
 
+  private damageAdjacentCrates(triggerCells: CellPos[]): void {
+    const seen = new Set<string>();
+    for (const { row, col } of triggerCells) {
+      for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr >= this.rows || nc < 0 || nc >= this.cols) continue;
+        if (!this.crateMask[nr][nc]) continue;
+        const key = `${nr},${nc}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        this.crateMask[nr][nc] = false;
+      }
+    }
+  }
+
+  /** Jelly absorbs first hit; returns cells whose candy is actually removed. */
+  private resolveClears(cells: CellPos[], triggerAdjacentCrates: CellPos[]): CellPos[] {
+    const cleared: CellPos[] = [];
+    for (const { row, col } of cells) {
+      if (this.isCrate(row, col)) continue;
+      if (this.jellyHits[row][col] > 0) {
+        this.jellyHits[row][col]--;
+        continue;
+      }
+      cleared.push({ row, col });
+    }
+    this.damageAdjacentCrates(triggerAdjacentCrates);
+    return cleared;
+  }
+
   isAdjacent(r1: number, c1: number, r2: number, c2: number): boolean {
+    if (this.isBlockedCell(r1, c1) || this.isBlockedCell(r2, c2)) return false;
     return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
   }
 
@@ -296,8 +386,12 @@ export class SimpleBoard {
 
   commitSpecialBlast(blast: SpecialBlast): void {
     this._combo++;
-    this._score += blast.cells.length * 15;
-    this.clearCells(blast.cells);
+    const cleared = this.resolveClears(blast.cells, blast.cells);
+    this._score += cleared.length * 15;
+    this.tallyClears(cleared);
+    for (const { row, col } of cleared) {
+      this.grid[row][col] = null;
+    }
   }
 
   /**
@@ -506,19 +600,34 @@ export class SimpleBoard {
   clearWaveCells(wave: ClearWave): void {
     const spawnKey = wave.spawn ? `${wave.spawn.pos.row},${wave.spawn.pos.col}` : '';
 
-    this.tallyClears(wave.cells.filter(({ row, col }) => `${row},${col}` !== spawnKey));
+    const cleared = this.resolveClears(
+      wave.cells.filter(({ row, col }) => `${row},${col}` !== spawnKey),
+      wave.cells,
+    );
 
-    for (const { row, col } of wave.cells) {
-      if (`${row},${col}` === spawnKey) continue;
+    const comboNext = this._combo + 1;
+    let score = cleared.length * 10 * comboNext;
+    if (this.frenzyCategory) {
+      score = 0;
+      for (const { row, col } of cleared) {
+        const cat = cellCategory(this.grid[row][col]);
+        const mult = cat === this.frenzyCategory ? 3 : 1;
+        score += 10 * comboNext * mult;
+      }
+    }
+
+    this.tallyClears(cleared);
+
+    for (const { row, col } of cleared) {
       this.grid[row][col] = null;
     }
 
-    if (wave.spawn) {
+    if (wave.spawn && !this.isCrate(wave.spawn.pos.row, wave.spawn.pos.col)) {
       this.grid[wave.spawn.pos.row][wave.spawn.pos.col] = wave.spawn.cell;
     }
 
     this._combo++;
-    this._score += wave.score;
+    this._score += score;
     this.lastPivot = null;
   }
 
@@ -526,35 +635,40 @@ export class SimpleBoard {
     const moves: FallMove[] = [];
 
     for (let c = 0; c < this.cols; c++) {
+      const slots: number[] = [];
+      for (let r = this.rows - 1; r >= 0; r--) {
+        if (!this.crateMask[r][c]) slots.push(r);
+      }
+
       const stack: { row: number; candy: CandyCell }[] = [];
       for (let r = this.rows - 1; r >= 0; r--) {
+        if (this.crateMask[r][c]) continue;
         const candy = this.grid[r][c];
         if (candy) stack.push({ row: r, candy });
       }
 
-      let writeRow = this.rows - 1;
-      for (const item of stack) {
+      for (let i = 0; i < stack.length; i++) {
+        const toRow = slots[i];
+        if (toRow === undefined) break;
         moves.push({
-          candy: item.candy,
+          candy: stack[i].candy,
           col: c,
-          fromRow: item.row,
-          toRow: writeRow,
+          fromRow: stack[i].row,
+          toRow,
           isNew: false,
         });
-        writeRow--;
       }
 
       let spawned = 0;
-      while (writeRow >= 0) {
+      for (let i = stack.length; i < slots.length; i++) {
         spawned++;
         moves.push({
           candy: makeCandy(randomCandyTypeFromRng(this.rng)),
           col: c,
           fromRow: -spawned,
-          toRow: writeRow,
+          toRow: slots[i],
           isNew: true,
         });
-        writeRow--;
       }
     }
 
@@ -563,9 +677,12 @@ export class SimpleBoard {
 
   applyFallMoves(moves: FallMove[]): void {
     for (let c = 0; c < this.cols; c++) {
-      for (let r = 0; r < this.rows; r++) this.grid[r][c] = null;
+      for (let r = 0; r < this.rows; r++) {
+        if (!this.crateMask[r][c]) this.grid[r][c] = null;
+      }
     }
     for (const m of moves) {
+      if (this.crateMask[m.toRow][m.col]) continue;
       this.grid[m.toRow][m.col] = m.candy;
     }
   }
@@ -618,6 +735,7 @@ export class SimpleBoard {
   private fill(): void {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
+        if (this.crateMask[r][c]) continue;
         this.grid[r][c] = makeCandy(randomCandyTypeFromRng(this.rng));
       }
     }
@@ -626,6 +744,7 @@ export class SimpleBoard {
   private refillRandom(): void {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
+        if (this.crateMask[r][c]) continue;
         this.grid[r][c] = makeCandy(randomCandyTypeFromRng(this.rng));
       }
     }

@@ -106,7 +106,7 @@ export function getDifficultyForLevel(level: number): Difficulty {
   return tierToDifficulty(getTierForLevel(level));
 }
 
-export function buildLevelConfig(level: number): LevelConfig {
+export function buildFormulaLevelConfig(level: number): LevelConfig {
   const tier = getTierForLevel(level);
   const difficulty = tierToDifficulty(tier);
   const chapter = Math.ceil(level / 6);
@@ -119,6 +119,11 @@ export function buildLevelConfig(level: number): LevelConfig {
     targetScore: Math.round(baseTarget * TARGET_MULT[tier]),
     moves: MOVE_LIMIT[tier],
   };
+}
+
+/** @deprecated Import from LevelScript for scripted overrides. */
+export function buildLevelConfig(level: number): LevelConfig {
+  return buildFormulaLevelConfig(level);
 }
 
 export function getStageTheme(difficulty: Difficulty): StageTheme {

@@ -1,4 +1,5 @@
-import { buildLevelConfig, type Difficulty } from './LevelDifficulty';
+import { buildLevelConfig } from './LevelScript';
+import type { Difficulty } from './LevelDifficulty';
 
 const STORAGE_KEY = 'crystal-nexus-progress';
 const TOTAL_LEVELS = 30;
@@ -21,6 +22,11 @@ export class LevelProgress {
   private data: ProgressData;
 
   constructor() {
+    this.reload();
+  }
+
+  /** Re-read persisted progress (e.g. after returning from gameplay). */
+  reload(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
@@ -54,6 +60,28 @@ export class LevelProgress {
       this.data.unlockedLevel = level + 1;
     }
     this.persist();
+  }
+
+  /** Skip current stage — unlock next with 1★, no bonus stars. */
+  recordSkip(level: number): boolean {
+    if (level < 1 || level > TOTAL_LEVELS) return false;
+    if (level !== this.data.unlockedLevel) return false;
+    if ((this.data.stars[String(level)] ?? 0) > 0) return false;
+
+    this.data.stars[String(level)] = 1;
+    if (level < TOTAL_LEVELS) {
+      this.data.unlockedLevel = level + 1;
+    }
+    this.persist();
+    return true;
+  }
+
+  canSkipLevel(level: number): boolean {
+    return (
+      level === this.data.unlockedLevel &&
+      (this.data.stars[String(level)] ?? 0) === 0 &&
+      level < TOTAL_LEVELS
+    );
   }
 
   getLevelList(): LevelInfo[] {

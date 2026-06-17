@@ -1,14 +1,20 @@
+import { CrystalCategory } from '@crystal-nexus/shared';
+import { BOARD_FRUIT_CATEGORIES } from '../candy/fruitAssets';
 import { grantCoins, trySpendCoins } from './Economy';
 
-export type DayChallengeMode = 'coin_rush';
+export type DayChallengeMode = 'coin_rush' | 'move_limit' | 'fruit_frenzy' | 'boss_brawl';
 
 export interface DayChallengeConfig {
   dateKey: string;
   mode: DayChallengeMode;
   modeLabel: string;
+  modeDescription: string;
   seed: number;
   moves: number;
-  rushTarget: number;
+  rushTarget?: number;
+  scoreTarget?: number;
+  frenzyCategory?: CrystalCategory;
+  bossHp?: number;
 }
 
 export interface DayChallengeDayRecord {
@@ -115,17 +121,55 @@ export function hasUnplayedDayChallenge(dateKey = getTodayDateKey()): boolean {
   return !record.completed && !record.freePlayUsed;
 }
 
-export function buildDayChallengeConfig(dateKey = getTodayDateKey()): DayChallengeConfig {
-  const seed = hashDateKey(`coin-rush:${dateKey}`);
+export function getModeForWeekday(weekday: number): DayChallengeMode {
+  // 0 Sun, 1 Mon … 6 Sat
+  if (weekday === 0) return 'boss_brawl';
+  if (weekday === 1 || weekday === 4) return 'coin_rush';
+  if (weekday === 2 || weekday === 5) return 'move_limit';
+  return 'fruit_frenzy';
+}
+
+const MODE_LABELS: Record<DayChallengeMode, string> = {
+  coin_rush: 'Coin Rush',
+  move_limit: 'Move Limit',
+  fruit_frenzy: 'Fruit Frenzy',
+  boss_brawl: 'Boss Brawl',
+};
+
+const MODE_DESCRIPTIONS: Record<DayChallengeMode, string> = {
+  coin_rush: 'Collect rush coins from every match.',
+  move_limit: 'Only a few moves — chase a huge score.',
+  fruit_frenzy: 'One fruit type scores triple points today.',
+  boss_brawl: 'Deal damage to the fruit monster before moves run out.',
+};
+
+export function buildDayChallengeConfig(dateKey = getTodayDateKey(), now = new Date()): DayChallengeConfig {
+  const weekday = now.getDay();
+  const mode = getModeForWeekday(weekday);
+  const seed = hashDateKey(`${mode}:${dateKey}`);
   const dayNum = parseInt(dateKey.slice(-2), 10) || 1;
-  return {
+  const base: DayChallengeConfig = {
     dateKey,
-    mode: 'coin_rush',
-    modeLabel: 'Coin Rush',
+    mode,
+    modeLabel: MODE_LABELS[mode],
+    modeDescription: MODE_DESCRIPTIONS[mode],
     seed,
     moves: 22,
-    rushTarget: 100 + (dayNum % 12) * 8,
   };
+
+  switch (mode) {
+    case 'coin_rush':
+      return { ...base, moves: 22, rushTarget: 100 + (dayNum % 12) * 8 };
+    case 'move_limit':
+      return { ...base, moves: 15, scoreTarget: 1800 + (dayNum % 10) * 120 };
+    case 'fruit_frenzy': {
+      const frenzyCategory =
+        BOARD_FRUIT_CATEGORIES[dayNum % BOARD_FRUIT_CATEGORIES.length] ?? CrystalCategory.Fire;
+      return { ...base, moves: 20, scoreTarget: 1500 + (dayNum % 8) * 100, frenzyCategory };
+    }
+    case 'boss_brawl':
+      return { ...base, moves: 18, bossHp: 800 + (dayNum % 7) * 50, scoreTarget: 0 };
+  }
 }
 
 export function canEnterDayChallenge(dateKey = getTodayDateKey()): {
@@ -167,16 +211,22 @@ export function consumeDayChallengeEntry(dateKey = getTodayDateKey()): {
 
 export function calcDayChallengeRewards(opts: {
   won: boolean;
+  mode: DayChallengeMode;
   rushCoins: number;
+  score: number;
   peakCombo: number;
   previousBestRush: number;
+  previousBestScore: number;
 }): DayChallengeRewards {
   if (!opts.won) {
     return { total: 0, base: 0, bestBonus: 0, comboBonus: 0, beatBest: false };
   }
 
   const base = 30;
-  const beatBest = opts.rushCoins > opts.previousBestRush;
+  const beatBest =
+    opts.mode === 'coin_rush'
+      ? opts.rushCoins > opts.previousBestRush
+      : opts.score > opts.previousBestScore;
   const bestBonus = beatBest ? 15 : 0;
   const comboBonus = opts.peakCombo >= 5 ? 10 : 0;
 
@@ -191,6 +241,7 @@ export function calcDayChallengeRewards(opts: {
 
 export function recordDayChallengeResult(opts: {
   dateKey: string;
+  mode: DayChallengeMode;
   won: boolean;
   rushCoins: number;
   score: number;
@@ -198,13 +249,17 @@ export function recordDayChallengeResult(opts: {
 }): DayChallengeRewards {
   const store = loadStore();
   const record = dayRecord(store, opts.dateKey);
-  const previousBest = record.bestRushCoins;
+  const previousBestRush = record.bestRushCoins;
+  const previousBestScore = record.bestScore;
 
   const rewards = calcDayChallengeRewards({
     won: opts.won,
+    mode: opts.mode,
     rushCoins: opts.rushCoins,
+    score: opts.score,
     peakCombo: opts.peakCombo,
-    previousBestRush: previousBest,
+    previousBestRush,
+    previousBestScore,
   });
 
   if (opts.won) {

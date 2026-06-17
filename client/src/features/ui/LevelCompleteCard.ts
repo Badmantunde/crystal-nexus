@@ -15,7 +15,9 @@ export interface LevelCompleteActions {
   onNext: () => void;
   onReplay: () => void;
   onMap?: () => void;
+  onSkip?: () => void;
   canReplay?: boolean;
+  showSkip?: boolean;
 }
 
 export function calcStars(score: number, target: number, movesLeft: number): 1 | 2 | 3 {
@@ -30,6 +32,7 @@ export class LevelCompleteCard {
   private onNext: (() => void) | null = null;
   private onReplay: (() => void) | null = null;
   private onMap: (() => void) | null = null;
+  private onSkip: (() => void) | null = null;
 
   constructor(containerId = 'ui-overlay') {
     const container = document.getElementById(containerId);
@@ -77,6 +80,7 @@ export class LevelCompleteCard {
           <button type="button" class="cn-btn cn-btn-primary" id="lc-next">Next</button>
         </div>
         <button type="button" class="cn-btn cn-btn-map" id="lc-map">World Map</button>
+        <button type="button" class="cn-btn cn-btn-skip" id="lc-skip" hidden>Skip stage · 250 coins</button>
         </div>
       </div>
     `;
@@ -96,12 +100,17 @@ export class LevelCompleteCard {
       this.hide();
       this.onMap?.();
     });
+    this.backdrop.querySelector('#lc-skip')!.addEventListener('click', () => {
+      this.hide();
+      this.onSkip?.();
+    });
   }
 
   show(stats: LevelStats, actions: LevelCompleteActions): void {
     this.onNext = actions.onNext;
     this.onReplay = actions.onReplay;
     this.onMap = actions.onMap ?? null;
+    this.onSkip = actions.onSkip ?? null;
 
     const won = stats.won;
     const badge = this.backdrop.querySelector('#lc-badge')!;
@@ -138,6 +147,8 @@ export class LevelCompleteCard {
     nextBtn.style.display = won ? '' : 'none';
     replayBtn.disabled = !canReplay;
     replayBtn.textContent = canReplay ? 'Replay' : 'No Lives';
+    const skipBtn = this.backdrop.querySelector('#lc-skip') as HTMLButtonElement;
+    skipBtn.hidden = !(actions.showSkip && actions.onSkip);
     this.card.classList.toggle('failed', !won);
     this.card.classList.toggle('no-lives', !canReplay && !won);
 

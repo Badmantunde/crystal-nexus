@@ -13,7 +13,7 @@ export interface MapNavState {
 }
 
 export interface MapNavBarOptions {
-  /** Hide Day Challenge pill (in-game HUD). */
+  /** Hide Daily Challenge pill (in-game HUD). */
   compact?: boolean;
 }
 
@@ -57,7 +57,7 @@ export class MapNavBar {
           </button>
         </div>
         <button type="button" class="map-pill map-pill--solo map-pill--day map-nav-day" id="map-nav-day">
-          Day Challenge
+          Daily Challenge
           <span class="map-nav-day-dot" id="map-nav-day-dot" hidden aria-hidden="true"></span>
         </button>
       </div>

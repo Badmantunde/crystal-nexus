@@ -5,7 +5,10 @@ import {
   formatCoins,
   purchaseOneLife,
   purchaseRefillLives,
+  purchaseSkipStage,
 } from '../player/Economy';
+import { purchaseRowBombBooster, BOOSTER_SHOP, getArmedBooster } from '../player/Boosters';
+import type { LevelProgress } from '../player/LevelProgress';
 import { getPlayerCoins } from '../player/PlayerProfile';
 import { MAP_NAV } from './mapNavAssets';
 
@@ -16,13 +19,15 @@ export class ShopModal {
   private balanceEl: HTMLElement;
   private messageEl: HTMLElement;
   private lives: LivesManager;
+  private progress: LevelProgress;
   private onChange: (() => void) | null = null;
 
-  constructor(containerId = 'menu-overlay', lives: LivesManager) {
+  constructor(containerId = 'menu-overlay', lives: LivesManager, progress: LevelProgress) {
     const container = document.getElementById(containerId);
     if (!container) throw new Error('ShopModal: missing container');
 
     this.lives = lives;
+    this.progress = progress;
 
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'cn-modal-backdrop shop-backdrop hidden';
@@ -48,8 +53,18 @@ export class ShopModal {
               <span class="shop-item-name">Refill all lives</span>
               <span class="shop-item-price">${SHOP.refillLives} coins</span>
             </button>
+            <button type="button" class="shop-item" id="shop-skip-stage">
+              <img class="shop-item-icon" src="${MAP_NAV.level}" width="32" height="32" alt="" />
+              <span class="shop-item-name">Skip current stage</span>
+              <span class="shop-item-price">${SHOP.skipStage} coins</span>
+            </button>
+            <button type="button" class="shop-item" id="shop-row-bomb">
+              <img class="shop-item-icon" src="${MAP_NAV.fire}" width="32" height="32" alt="" />
+              <span class="shop-item-name">Row bomb booster</span>
+              <span class="shop-item-price">${BOOSTER_SHOP.row_bomb} coins</span>
+            </button>
           </div>
-          <p class="shop-hint">Win levels and Day Challenges to earn more coins.</p>
+          <p class="shop-hint">Boosters arm for your next story level. Win levels and Daily Challenges to earn more coins.</p>
           <p class="shop-message" id="shop-message" hidden></p>
           <button type="button" class="cn-btn cn-btn-primary" id="shop-close">Done</button>
         </div>
@@ -67,6 +82,17 @@ export class ShopModal {
     });
     this.backdrop.querySelector('#shop-refill-lives')!.addEventListener('click', () => {
       this.flashMessage(purchaseRefillLives(this.lives).message);
+      this.refresh();
+      this.onChange?.();
+    });
+    this.backdrop.querySelector('#shop-skip-stage')!.addEventListener('click', () => {
+      const level = this.progress.getUnlockedLevel();
+      this.flashMessage(purchaseSkipStage(this.progress, level).message);
+      this.refresh();
+      this.onChange?.();
+    });
+    this.backdrop.querySelector('#shop-row-bomb')!.addEventListener('click', () => {
+      this.flashMessage(purchaseRowBombBooster().message);
       this.refresh();
       this.onChange?.();
     });
@@ -103,6 +129,11 @@ export class ShopModal {
     const full = this.lives.getLives() >= MAX_LIVES;
     (this.backdrop.querySelector('#shop-buy-life') as HTMLButtonElement).disabled = full;
     (this.backdrop.querySelector('#shop-refill-lives') as HTMLButtonElement).disabled = full;
+    const skipLevel = this.progress.getUnlockedLevel();
+    (this.backdrop.querySelector('#shop-skip-stage') as HTMLButtonElement).disabled =
+      !this.progress.canSkipLevel(skipLevel);
+    (this.backdrop.querySelector('#shop-row-bomb') as HTMLButtonElement).disabled =
+      getArmedBooster() !== null;
   }
 
   private flashMessage(text: string): void {

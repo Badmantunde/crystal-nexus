@@ -26,6 +26,14 @@ export class LivesManager {
     this.applyRegeneration();
   }
 
+  /** Re-read persisted lives (e.g. after returning from gameplay). */
+  reload(): void {
+    const data = this.load();
+    this.lives = data.lives;
+    this.regenQueue = data.regenQueue;
+    this.applyRegeneration();
+  }
+
   /** Reconcile timers; returns true if lives or queue changed. */
   tick(): boolean {
     const beforeLives = this.lives;

@@ -1,5 +1,5 @@
 import type { LevelProgress } from './LevelProgress';
-import { buildLevelConfig } from './LevelDifficulty';
+import { buildLevelConfig } from './LevelScript';
 
 export interface PlayerRank {
   name: string;

@@ -1,4 +1,5 @@
-import { getDifficultyForLevel } from '../player/LevelDifficulty';
+import { buildLevelConfig } from '../player/LevelScript';
+import { purchaseSkipStage, SHOP } from '../player/Economy';
 import { getChapterForLevel, isChapterStart } from '../player/Chapters';
 import { LevelProgress, type LevelInfo } from '../player/LevelProgress';
 import { LivesManager } from '../player/Lives';
@@ -15,6 +16,7 @@ const NODE_W = 97;
 const NODE_H = 84;
 const ROW_H = 112;
 const CHAPTER_ROW_H = 52;
+const PATH_GAP = 14;
 const NODE_HALF = NODE_W / 2;
 const TOP_PAD = 40;
 const BOTTOM_PAD = 64;
@@ -41,7 +43,7 @@ export class LevelMap {
     this.progress = new LevelProgress();
     this.lives = new LivesManager();
     this.noLivesModal = new NoLivesModal(containerId, this.lives);
-    this.shopModal = new ShopModal(containerId, this.lives);
+    this.shopModal = new ShopModal(containerId, this.lives, this.progress);
     this.dayChallengeModal = new DayChallengeModal(containerId);
 
     this.backdrop = document.createElement('div');
@@ -69,7 +71,7 @@ export class LevelMap {
     this.nav.setOnDayChallenge(() => this.dayChallengeModal.show());
     this.dayChallengeModal.setOnPlay(() => this.onDayChallengePlay?.());
     this.dayChallengeModal.setOnChange(() => this.updateNav(this.progress.getUnlockedLevel()));
-    this.shopModal.setOnChange(() => this.updateNav(this.progress.getUnlockedLevel()));
+    this.shopModal.setOnChange(() => this.render());
     this.noLivesModal.setOnShop(() => this.shopModal.show('lives'));
   }
 
@@ -97,6 +99,8 @@ export class LevelMap {
   }
 
   refresh(): void {
+    this.progress.reload();
+    this.lives.reload();
     if (!this.backdrop.classList.contains('hidden')) this.render();
   }
 
@@ -112,18 +116,16 @@ export class LevelMap {
   }
 
   private render(): void {
+    this.progress.reload();
+    this.lives.reload();
+
     const levels = this.progress.getLevelList();
     const unlocked = this.progress.getUnlockedLevel();
 
     this.updateNav(unlocked);
 
     const chapterRows = levels.filter((l) => isChapterStart(l.level)).length;
-    const stageH =
-      TOP_PAD +
-      (levels.length - 1) * ROW_H +
-      chapterRows * CHAPTER_ROW_H +
-      NODE_H +
-      BOTTOM_PAD;
+    const stageH = this.mapStageHeight(levels.length, chapterRows);
 
     const stage = this.backdrop.querySelector('.map-stage') as HTMLElement;
     stage.style.minHeight = `${stageH}px`;
@@ -148,6 +150,21 @@ export class LevelMap {
         } else {
           this.nav.shakeLives();
           this.noLivesModal.show();
+        }
+      });
+    });
+
+    this.listEl.querySelectorAll('.map-node-skip').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const level = Number((btn as HTMLElement).dataset.skipLevel);
+        if (!level) return;
+        const result = purchaseSkipStage(this.progress, level);
+        if (result.ok) {
+          this.render();
+          this.scrollToCurrent();
+        } else {
+          this.shopModal.show('coins');
         }
       });
     });
@@ -187,19 +204,41 @@ export class LevelMap {
         try {
           img.src = await getThemedLevelTileUrl(level, unlocked);
         } catch {
-          img.src = getLevelMapSvgPath(level);
+          img.src = getLevelMapSvgPath(level, unlocked);
         }
       }),
     );
   }
 
-  private nodeCenter(index: number, levelCount: number): { x: number; y: number } {
+  private chapterHeaderCountThrough(level: number): number {
+    let n = 0;
+    for (let lv = 1; lv <= level; lv++) {
+      if (isChapterStart(lv)) n++;
+    }
+    return n;
+  }
+
+  private mapStageHeight(levelCount: number, chapterRows: number): number {
+    const itemCount = levelCount + chapterRows;
+    const flexH =
+      levelCount * ROW_H + chapterRows * CHAPTER_ROW_H + Math.max(0, itemCount - 1) * PATH_GAP;
+    return TOP_PAD + flexH + BOTTOM_PAD;
+  }
+
+  private verticalOffsetFromBottom(level: number): number {
+    const index = level - 1;
+    const chapters = this.chapterHeaderCountThrough(level);
+    return (
+      ROW_H / 2 + index * (ROW_H + PATH_GAP) + chapters * (CHAPTER_ROW_H + PATH_GAP)
+    );
+  }
+
+  private nodeCenter(index: number, level: number, levelCount: number): { x: number; y: number } {
     const chapterRows = Array.from({ length: levelCount }, (_, i) => i + 1).filter((lv) =>
       isChapterStart(lv),
     ).length;
-    const totalH = TOP_PAD + (levelCount - 1) * ROW_H + chapterRows * CHAPTER_ROW_H + NODE_H + BOTTOM_PAD;
-    const rungFromBottom = index;
-    const y = totalH - BOTTOM_PAD - NODE_H / 2 - rungFromBottom * ROW_H;
+    const totalH = this.mapStageHeight(levelCount, chapterRows);
+    const y = totalH - BOTTOM_PAD - this.verticalOffsetFromBottom(level);
 
     const side = index % 2 === 0 ? 'left' : 'right';
     const baseX = side === 'left' ? NODE_HALF + 12 : MAP_W - NODE_HALF - 12;
@@ -240,12 +279,12 @@ export class LevelMap {
   }
 
   private drawTrail(levelCount: number, unlockedLevel: number): void {
-    const allPts = Array.from({ length: levelCount }, (_, i) => this.nodeCenter(i, levelCount));
+    const allPts = Array.from({ length: levelCount }, (_, i) => this.nodeCenter(i, i + 1, levelCount));
     const activePts = allPts.slice(0, Math.max(1, unlockedLevel));
     const chapterRows = Array.from({ length: levelCount }, (_, i) => i + 1).filter((lv) =>
       isChapterStart(lv),
     ).length;
-    const height = TOP_PAD + (levelCount - 1) * ROW_H + chapterRows * CHAPTER_ROW_H + NODE_H + BOTTOM_PAD;
+    const height = this.mapStageHeight(levelCount, chapterRows);
 
     this.trailEl.setAttribute('viewBox', `0 0 ${MAP_W} ${height}`);
     this.trailEl.innerHTML = `
@@ -270,7 +309,9 @@ export class LevelMap {
     const side = index % 2 === 0 ? 'left' : 'right';
     const locked = !info.unlocked;
     const isCurrent = info.level === this.progress.getUnlockedLevel() && !locked;
-    const diffClass = `map-node--${getDifficultyForLevel(info.level)}`;
+    const cfg = buildLevelConfig(info.level);
+    const diffClass = `map-node--${cfg.difficulty}`;
+    const canSkip = isCurrent && this.progress.canSkipLevel(info.level);
 
     return `
       <div class="map-row map-row-${side}" style="--row-i:${index}">
@@ -292,6 +333,11 @@ export class LevelMap {
           />
           <span class="map-node-stars" title="${info.stars} of 3 stars">${starRowHtml(info.stars)}</span>
         </button>
+        ${
+          canSkip
+            ? `<button type="button" class="map-node-skip" data-skip-level="${info.level}" aria-label="Skip stage for ${SHOP.skipStage} coins">Skip · ${SHOP.skipStage}</button>`
+            : ''
+        }
       </div>
     `;
   }

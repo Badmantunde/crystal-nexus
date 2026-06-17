@@ -1,10 +1,12 @@
 import { MAX_LIVES } from './Lives';
 import { addPlayerCoins, getPlayerCoins, setPlayerCoins } from './PlayerProfile';
+import type { LevelProgress } from './LevelProgress';
 
 export const SHOP = {
   oneLife: 100,
   refillLives: 400,
   skipStage: 250,
+  continue: 150,
 } as const;
 
 /** Coins awarded on level win: base + star bonuses. */
@@ -62,4 +64,24 @@ export function purchaseRefillLives(wallet: LivesWallet): PurchaseResult {
 
 export function grantCoins(amount: number): number {
   return addPlayerCoins(amount);
+}
+
+export function purchaseContinue(): PurchaseResult {
+  if (!trySpendCoins(SHOP.continue)) {
+    return { ok: false, message: `Need ${SHOP.continue} coins` };
+  }
+  return { ok: true, message: '+5 moves!' };
+}
+
+export function purchaseSkipStage(progress: LevelProgress, level: number): PurchaseResult {
+  if (!progress.canSkipLevel(level)) {
+    return { ok: false, message: 'Can only skip your current uncleared stage' };
+  }
+  if (!trySpendCoins(SHOP.skipStage)) {
+    return { ok: false, message: `Need ${SHOP.skipStage} coins` };
+  }
+  if (!progress.recordSkip(level)) {
+    return { ok: false, message: 'Could not skip this stage' };
+  }
+  return { ok: true, message: 'Stage skipped — next level unlocked!' };
 }
