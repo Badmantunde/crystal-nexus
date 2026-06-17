@@ -24,10 +24,12 @@ export interface ClearWave {
 }
 
 export interface SpecialBlast {
-  kind: 'row' | 'col' | 'color' | 'cross' | 'col_double';
+  kind: 'row' | 'col' | 'color' | 'cross' | 'col_double' | 'color_row' | 'color_col' | 'board_clear';
   origin: CellPos;
   secondaryOrigin?: CellPos;
   columns?: number[];
+  /** Row/col bomb origins spawned by rainbow + line-bomb combo. */
+  chainOrigins?: CellPos[];
   cells: CellPos[];
   dirRow: number;
   dirCol: number;
@@ -354,13 +356,14 @@ export class SimpleBoard {
     const resolved = this.resolveSpecialSwap(r2, c2, r1, c1);
     if (!resolved) return null;
 
-    const { cells, kind, origin, secondaryOrigin, columns } = resolved;
+    const { cells, kind, origin, secondaryOrigin, columns, targetCategory, chainOrigins } = resolved;
     const landed = this.getCell(r2, c2);
     const other = this.getCell(r1, c1);
     const partner = isSpecial(landed) ? other : landed;
-    const targetCategory = kind === 'color' ? partner?.category : undefined;
+    const resolvedCategory =
+      targetCategory ?? (kind === 'color' ? partner?.category : undefined);
     const strikeOrder =
-      kind === 'color'
+      kind === 'color' || kind === 'board_clear'
         ? [...cells].sort((a, b) => {
             const da = Math.hypot(a.row - origin.row, a.col - origin.col);
             const db = Math.hypot(b.row - origin.row, b.col - origin.col);
@@ -373,13 +376,19 @@ export class SimpleBoard {
       origin,
       secondaryOrigin,
       columns,
+      chainOrigins,
       cells,
       dirRow:
-        kind === 'col' || kind === 'col_double' ? (dirRow !== 0 ? dirRow : 1) : 0,
-      dirCol: kind === 'row' || kind === 'cross' ? (dirCol !== 0 ? dirCol : 1) : 0,
+        kind === 'col' || kind === 'col_double' || kind === 'color_col'
+          ? (dirRow !== 0 ? dirRow : 1)
+          : 0,
+      dirCol:
+        kind === 'row' || kind === 'cross' || kind === 'color_row'
+          ? (dirCol !== 0 ? dirCol : 1)
+          : 0,
       rows: this.rows,
       cols: this.cols,
-      targetCategory,
+      targetCategory: resolvedCategory,
       strikeOrder,
     };
   }
@@ -387,7 +396,13 @@ export class SimpleBoard {
   commitSpecialBlast(blast: SpecialBlast): void {
     this._combo++;
     const cleared = this.resolveClears(blast.cells, blast.cells);
-    this._score += cleared.length * 15;
+    let score = cleared.length * 15;
+    if (blast.kind === 'board_clear') {
+      score = Math.max(1200, cleared.length * 35);
+    } else if (blast.kind === 'color_row' || blast.kind === 'color_col') {
+      score = cleared.length * 22;
+    }
+    this._score += score;
     this.tallyClears(cleared);
     for (const { row, col } of cleared) {
       this.grid[row][col] = null;
@@ -465,6 +480,8 @@ export class SimpleBoard {
     origin: CellPos;
     secondaryOrigin?: CellPos;
     columns?: number[];
+    targetCategory?: CrystalCategory;
+    chainOrigins?: CellPos[];
   } | null {
     const landed = this.getCell(r2, c2);
     const other = this.getCell(r1, c1);
@@ -479,35 +496,66 @@ export class SimpleBoard {
     let origin: CellPos = specials[0].pos;
     let secondaryOrigin: CellPos | undefined;
     let columns: number[] | undefined;
+    let targetCategory: CrystalCategory | undefined;
+    let chainOrigins: CellPos[] | undefined;
 
     if (specials.length === 2) {
       const a = specials[0];
       const b = specials[1];
-      const hasRow = a.cell.special === 'row' || b.cell.special === 'row';
-      const hasCol = a.cell.special === 'col' || b.cell.special === 'col';
+      const rainbowA = a.cell.special === 'color';
+      const rainbowB = b.cell.special === 'color';
 
-      if (hasRow && hasCol) {
-        kind = 'cross';
-        const rowBomb = a.cell.special === 'row' ? a : b;
-        const colBomb = a.cell.special === 'col' ? a : b;
-        origin = rowBomb.pos;
-        secondaryOrigin = colBomb.pos;
-        this.addRowCells(toClear, origin);
-        this.addColCells(toClear, secondaryOrigin);
-      } else if (a.cell.special === 'col' && b.cell.special === 'col') {
-        kind = 'col_double';
+      if (rainbowA && rainbowB) {
+        kind = 'board_clear';
         origin = a.pos;
         secondaryOrigin = b.pos;
-        columns = [...new Set([a.pos.col, b.pos.col])];
-        for (const col of columns) {
-          for (let r = 0; r < this.rows; r++) toClear.set(`${r},${col}`, { row: r, col });
+        this.addAllBoardCells(toClear);
+      } else if (rainbowA || rainbowB) {
+        const rainbow = rainbowA ? a : b;
+        const line = rainbowA ? b : a;
+        origin = rainbow.pos;
+        secondaryOrigin = line.pos;
+
+        if (line.cell.special === 'row') {
+          kind = 'color_row';
+          targetCategory = line.cell.category;
+          chainOrigins = this.addColorLineCombo(toClear, targetCategory, 'row');
+        } else if (line.cell.special === 'col') {
+          kind = 'color_col';
+          targetCategory = line.cell.category;
+          chainOrigins = this.addColorLineCombo(toClear, targetCategory, 'col');
+        } else {
+          this.addSpecialEffect(toClear, rainbow.pos, rainbow.cell, line.cell);
+          kind = 'color';
+          targetCategory = line.cell.category;
         }
       } else {
-        for (const { pos, cell } of specials) {
-          this.addSpecialEffect(toClear, pos, cell, other ?? landed);
+        const hasRow = a.cell.special === 'row' || b.cell.special === 'row';
+        const hasCol = a.cell.special === 'col' || b.cell.special === 'col';
+
+        if (hasRow && hasCol) {
+          kind = 'cross';
+          const rowBomb = a.cell.special === 'row' ? a : b;
+          const colBomb = a.cell.special === 'col' ? a : b;
+          origin = rowBomb.pos;
+          secondaryOrigin = colBomb.pos;
+          this.addRowCells(toClear, origin);
+          this.addColCells(toClear, secondaryOrigin);
+        } else if (a.cell.special === 'col' && b.cell.special === 'col') {
+          kind = 'col_double';
+          origin = a.pos;
+          secondaryOrigin = b.pos;
+          columns = [...new Set([a.pos.col, b.pos.col])];
+          for (const col of columns) {
+            for (let r = 0; r < this.rows; r++) toClear.set(`${r},${col}`, { row: r, col });
+          }
+        } else {
+          for (const { pos, cell } of specials) {
+            this.addSpecialEffect(toClear, pos, cell, other ?? landed);
+          }
+          kind = this.inferBlastKind(specials[0].cell);
+          origin = specials[0].pos;
         }
-        kind = this.inferBlastKind(specials[0].cell);
-        origin = specials[0].pos;
       }
 
       toClear.set(`${r1},${c1}`, { row: r1, col: c1 });
@@ -517,9 +565,40 @@ export class SimpleBoard {
       this.addSpecialEffect(toClear, pos, cell, other ?? landed);
       kind = this.inferBlastKind(cell);
       origin = pos;
+      if (kind === 'color') targetCategory = (other ?? landed)?.category ?? cell.category;
     }
 
-    return { cells: [...toClear.values()], kind, origin, secondaryOrigin, columns };
+    return { cells: [...toClear.values()], kind, origin, secondaryOrigin, columns, targetCategory, chainOrigins };
+  }
+
+  /** Rainbow + row/col: every matching fruit becomes a line bomb and fires immediately. */
+  private addColorLineCombo(
+    out: Map<string, CellPos>,
+    category: CrystalCategory,
+    axis: 'row' | 'col',
+  ): CellPos[] {
+    const origins: CellPos[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.isCrate(r, c)) continue;
+        const cell = this.getCell(r, c);
+        if (!cell || cell.category !== category) continue;
+        origins.push({ row: r, col: c });
+        if (axis === 'row') this.addRowCells(out, { row: r, col: c });
+        else this.addColCells(out, { row: r, col: c });
+      }
+    }
+    return origins;
+  }
+
+  private addAllBoardCells(out: Map<string, CellPos>): void {
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.isCrate(r, c)) continue;
+        if (!this.getCell(r, c)) continue;
+        out.set(`${r},${c}`, { row: r, col: c });
+      }
+    }
   }
 
   private inferBlastKind(cell: CandyCell): SpecialBlast['kind'] {

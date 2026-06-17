@@ -80,6 +80,13 @@ class SoundEngineImpl {
     setTimeout(() => this.tone(880 + combo * 20, 0.22, 'sine', 0.05), 60);
   }
 
+  playBoardClear(): void {
+    [392, 494, 587, 698, 831, 988, 1175].forEach((freq, i) => {
+      setTimeout(() => this.tone(freq, 0.2, 'triangle', 0.1, i * 2), i * 70);
+    });
+    setTimeout(() => this.chord([1047, 1319, 1568, 2093], 0.45, 0.12), 520);
+  }
+
   playRainbow(): void {
     const notes = [523, 659, 784, 988, 1175, 1319, 1568];
     notes.forEach((freq, i) => {

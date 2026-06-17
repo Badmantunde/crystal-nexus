@@ -617,6 +617,7 @@ export class CanvasGame {
     if (blast) {
       await this.playBlastAnimation(blast);
       this.board.commitSpecialBlast(blast);
+      this.dealBossDamage(blast.cells.length);
       this.activeBlast = null;
       this.fallMoves = this.board.computeFallMoves();
       this.cacheFallMovingFrom();
@@ -640,11 +641,18 @@ export class CanvasGame {
   private async playBlastAnimation(blast: SpecialBlast): Promise<void> {
     this.activeBlast = blast;
     this.blastProgress = 0;
-    this.praise.show(praiseForBlast(blast.kind, blast.targetCategory), blast.kind === 'color' ? 1200 : 1400);
-    if (blast.kind === 'color') SoundEngine.playRainbow();
+    const rainbowKinds = new Set(['color', 'color_row', 'color_col', 'board_clear']);
+    this.praise.show(
+      praiseForBlast(blast.kind, blast.targetCategory),
+      rainbowKinds.has(blast.kind) ? 1400 : 1400,
+    );
+    if (blast.kind === 'board_clear') SoundEngine.playBoardClear();
+    else if (rainbowKinds.has(blast.kind)) SoundEngine.playRainbow();
     else SoundEngine.playSpecial();
     const duration =
-      blast.kind === 'color' ? 820
+      blast.kind === 'board_clear' ? 1050
+      : blast.kind === 'color_row' || blast.kind === 'color_col' ? 920
+      : blast.kind === 'color' ? 820
       : blast.kind === 'cross' ? 620
       : blast.kind === 'col_double' ? 680
       : 520;
@@ -1254,7 +1262,7 @@ export class CanvasGame {
     if (blast && this.phase === 'blast') {
       const flash = blastScreenFlash(blast, this.blastProgress);
       if (flash > 0.01) {
-        if (blast.kind === 'color') {
+        if (blast.kind === 'color' || blast.kind === 'board_clear') {
           drawRainbowScreenFlash(this.ctx, w, h, flash, this.blastProgress);
         } else {
           this.ctx.fillStyle = `rgba(255,255,255,${flash})`;
@@ -1286,7 +1294,10 @@ export class CanvasGame {
     if (blast && blastCellSet?.has(key)) {
       const vanish = blastCellVanish(blast, r, c, this.blastProgress);
       if (vanish > 0) {
-        const kick = blast.kind === 'color' ? 12 : 8;
+        const kick =
+          blast.kind === 'board_clear' ? 14
+          : blast.kind === 'color' || blast.kind === 'color_row' || blast.kind === 'color_col' ? 12
+          : 8;
         shakeX = Math.sin(vanish * Math.PI * 8) * (1 - vanish) * kick;
         shakeY = Math.cos(vanish * Math.PI * 6) * (1 - vanish) * kick * 0.85;
       }

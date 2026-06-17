@@ -40,6 +40,40 @@ export function drawLineBlast(
     }
   } else if (blast.kind === 'color') {
     drawRainbowBlast(ctx, blast, board, ox, oy, progress);
+  } else if (blast.kind === 'board_clear') {
+    drawRainbowBlast(ctx, blast, board, ox, oy, progress);
+    if (progress > 0.2) {
+      ctx.fillStyle = `rgba(255,255,255,${(1 - progress) * 0.18})`;
+      ctx.fillRect(x, y, w, h);
+    }
+  } else if (blast.kind === 'color_row' && blast.chainOrigins?.length) {
+    drawRainbowVortex(ctx, ox, oy, cell, clamp01(progress / 0.2), progress);
+    const rows = [...new Set(blast.chainOrigins.map((o) => o.row))].sort((a, b) => a - b);
+    const count = rows.length;
+    rows.forEach((rowIdx, i) => {
+      const hitAt = i / (count + 0.35);
+      const localT = clamp01((progress - hitAt * 0.42) / 0.38);
+      if (localT <= 0) return;
+      const anchor = blast.chainOrigins!.find((o) => o.row === rowIdx) ?? blast.origin;
+      const cx = x + anchor.col * cell + cell / 2;
+      const cy = y + rowIdx * cell + cell / 2;
+      const fakeBlast = { ...blast, kind: 'row' as const, origin: { row: rowIdx, col: anchor.col } };
+      drawRowSweep(ctx, x, y, w, cell, fakeBlast, cx, cy, localT);
+    });
+  } else if (blast.kind === 'color_col' && blast.chainOrigins?.length) {
+    drawRainbowVortex(ctx, ox, oy, cell, clamp01(progress / 0.2), progress);
+    const cols = [...new Set(blast.chainOrigins.map((o) => o.col))].sort((a, b) => a - b);
+    const count = cols.length;
+    cols.forEach((colIdx, i) => {
+      const hitAt = i / (count + 0.35);
+      const localT = clamp01((progress - hitAt * 0.42) / 0.38);
+      if (localT <= 0) return;
+      const anchor = blast.chainOrigins!.find((o) => o.col === colIdx) ?? blast.origin;
+      const cx = x + colIdx * cell + cell / 2;
+      const cy = y + anchor.row * cell + cell / 2;
+      const fakeBlast = { ...blast, kind: 'col' as const, origin: { row: anchor.row, col: colIdx } };
+      drawColSweep(ctx, x, y, h, cell, fakeBlast, cx, cy, localT);
+    });
   }
 
   ctx.restore();
@@ -57,6 +91,18 @@ export function blastScreenFlash(blast: SpecialBlast, progress: number): number 
     if (t < 0.06) return (t / 0.06) * 0.35;
     if (t > 0.46 && t < 0.52) return 0.45;
     if (t > 0.52 && t < 0.58) return 0.45 * (1 - (t - 0.52) / 0.06);
+    return 0;
+  }
+  if (blast.kind === 'board_clear') {
+    if (t < 0.06) return (t / 0.06) * 0.55;
+    if (t < 0.2) return 0.95 * (1 - (t - 0.06) / 0.14);
+    if (t > 0.65 && t < 0.88) return ((t - 0.65) / 0.23) * 0.3;
+    return 0;
+  }
+  if (blast.kind === 'color_row' || blast.kind === 'color_col') {
+    if (t < 0.08) return (t / 0.08) * 0.4;
+    if (t < 0.16) return 0.55 * (1 - (t - 0.08) / 0.08);
+    if (t > 0.7 && t < 0.9) return ((t - 0.7) / 0.2) * 0.15;
     return 0;
   }
   if (blast.kind === 'color') {
@@ -80,6 +126,17 @@ export function blastShakeIntensity(blast: SpecialBlast, progress: number): numb
   if (blast.kind === 'col_double') {
     const spike = progress < 0.5 ? 1.5 : 1.8;
     return 12 * decay * spike;
+  }
+  if (blast.kind === 'board_clear') {
+    let spike = 1;
+    if (progress > 0.08 && progress < 0.22) spike = 3.2;
+    else if (progress > 0.2 && progress < 0.8) spike = 1.8 + Math.abs(Math.sin(progress * Math.PI * 18)) * 0.9;
+    return 18 * decay * spike;
+  }
+  if (blast.kind === 'color_row' || blast.kind === 'color_col') {
+    const chain = blast.chainOrigins?.length ?? 1;
+    const spike = progress < 0.2 ? 2.2 : 1.3 + Math.min(chain, 6) * 0.15;
+    return 13 * decay * spike;
   }
   if (blast.kind === 'color') {
     let spike = 1;
@@ -952,6 +1009,40 @@ export function blastCellVanish(
       ? (pass * (blast.rows + 1.2) - forward) / 1.4
       : (Math.max(0, pass - 0.06) * (blast.rows + 1.2) - forward) / 1.6;
     return clamp01(sideT);
+  }
+
+  if (blast.kind === 'board_clear') {
+    const order = blast.strikeOrder ?? blast.cells;
+    const idx = order.findIndex((c) => c.row === row && c.col === col);
+    if (idx < 0) return 0;
+    const total = Math.max(order.length, 1);
+    const hitAt = (idx + 0.08) / (total + 0.25);
+    const v = clamp01((t - hitAt * 0.75) / 0.09);
+    return v * v * (2 - v);
+  }
+
+  if (blast.kind === 'color_row' && blast.chainOrigins?.length) {
+    const rows = [...new Set(blast.chainOrigins.map((o) => o.row))].sort((a, b) => a - b);
+    if (!rows.includes(row)) return 0;
+    const rowIndex = rows.indexOf(row);
+    const count = rows.length;
+    const hitAt = (rowIndex + 0.15) / (count + 0.35);
+    const rowT = clamp01((t - hitAt * 0.5) / 0.22);
+    const anchorCol = blast.chainOrigins.find((o) => o.row === row)?.col ?? blast.origin.col;
+    const deltaCol = Math.abs(col - anchorCol);
+    return clamp01((rowT * (blast.cols + 1.2) - deltaCol) / 1.4);
+  }
+
+  if (blast.kind === 'color_col' && blast.chainOrigins?.length) {
+    const cols = [...new Set(blast.chainOrigins.map((o) => o.col))].sort((a, b) => a - b);
+    if (!cols.includes(col)) return 0;
+    const colIndex = cols.indexOf(col);
+    const count = cols.length;
+    const hitAt = (colIndex + 0.15) / (count + 0.35);
+    const colT = clamp01((t - hitAt * 0.5) / 0.22);
+    const anchorRow = blast.chainOrigins.find((o) => o.col === col)?.row ?? blast.origin.row;
+    const deltaRow = Math.abs(row - anchorRow);
+    return clamp01((colT * (blast.rows + 1.2) - deltaRow) / 1.4);
   }
 
   const order = blast.strikeOrder ?? blast.cells;

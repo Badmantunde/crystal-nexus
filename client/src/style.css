@@ -1080,9 +1080,9 @@ textarea {
 
 .hud-diff-pill {
   position: relative;
-  width: 136.2px;
-  height: 40px;
+  display: inline-flex;
   flex-shrink: 0;
+  max-width: min(100%, 220px);
 }
 
 .hud-diff-pill-outer {
@@ -1093,8 +1093,12 @@ textarea {
 }
 
 .hud-diff-pill-inner {
-  position: absolute;
-  inset: 2px;
+  position: relative;
+  z-index: 1;
+  margin: 2px;
+  padding: 5px 16px;
+  min-height: 36px;
+  box-sizing: border-box;
   border-radius: 999px;
   background: radial-gradient(circle at center, var(--cn-ui-pill-inner-center) 0%, var(--cn-ui-pill-inner-edge) 100%);
   display: flex;
@@ -1104,10 +1108,11 @@ textarea {
 
 .hud-diff-pill-text {
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 30px;
+  font-size: clamp(0.95rem, 3.8vw, 1.35rem);
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
   color: var(--cn-ui-accent-text);
   -webkit-text-stroke: 1.5px #fff;
   paint-order: stroke fill;
@@ -1124,11 +1129,6 @@ textarea {
 
 .hud-diff-pill.diff-monster .hud-diff-pill-outer {
   background: linear-gradient(90deg, #ffb8b8 0%, #ff5454 45%, #a30000 75%, #ff7b7b 100%);
-}
-
-.hud-diff-pill.diff-monster .hud-diff-pill-text {
-  font-size: 22px;
-  letter-spacing: 0.01em;
 }
 
 .hud-restart-btn,
@@ -2706,17 +2706,14 @@ textarea {
     font-size: 1.1rem;
   }
 
-  .hud-diff-pill {
-    width: 118px;
-    height: 36px;
+  .hud-diff-pill-inner {
+    padding: 4px 12px;
+    min-height: 32px;
   }
 
   .hud-diff-pill-text {
-    font-size: 20px;
-  }
-
-  .hud-diff-pill.diff-monster .hud-diff-pill-text {
-    font-size: 16px;
+    font-size: clamp(0.8rem, 3.2vw, 1rem);
+    letter-spacing: 0.03em;
   }
 
   .cn-top-banner {
@@ -2761,13 +2758,13 @@ textarea {
   gap: 6px;
 }
 
-.hud-board-footer--compact .hud-diff-pill {
-  width: 118px;
-  height: 36px;
+.hud-board-footer--compact .hud-diff-pill-inner {
+  padding: 3px 10px;
+  min-height: 30px;
 }
 
 .hud-board-footer--compact .hud-diff-pill-text {
-  font-size: 22px;
+  font-size: clamp(0.75rem, 2.8vw, 0.95rem);
 }
 
 .hud-side-toolbar--compact {

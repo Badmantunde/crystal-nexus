@@ -34,9 +34,20 @@ export function praiseForSpawn(special: SpecialType): PraiseMessage {
 }
 
 export function praiseForBlast(
-  kind: 'row' | 'col' | 'color' | 'cross' | 'col_double',
+  kind: 'row' | 'col' | 'color' | 'cross' | 'col_double' | 'color_row' | 'color_col' | 'board_clear',
   category?: CrystalCategory,
 ): PraiseMessage {
+  if (kind === 'board_clear') {
+    return { text: 'BOARD WIPEOUT!', tier: 'legendary', sub: 'Double rainbow clears everything' };
+  }
+  if (kind === 'color_row') {
+    const label = category ? getCandyStyle(category).label : 'fruit';
+    return { text: 'Rainbow Rows!', tier: 'legendary', sub: `All ${label} → row blasts` };
+  }
+  if (kind === 'color_col') {
+    const label = category ? getCandyStyle(category).label : 'fruit';
+    return { text: 'Rainbow Columns!', tier: 'legendary', sub: `All ${label} → column blasts` };
+  }
   if (kind === 'cross') return { text: 'Cross Blast!', tier: 'legendary', sub: 'Row + Column combo' };
   if (kind === 'col_double') return { text: 'Double Strike!', tier: 'amazing', sub: 'Column hit twice' };
   if (kind === 'row') return { text: 'Kaboom!', tier: 'great', sub: 'Row cleared' };
